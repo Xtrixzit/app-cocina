@@ -1,0 +1,144 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default-deny all documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity Validations
+    function isValidRecipe(data) {
+      return data.userId == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
+             data.servings is number && data.servings >= 1 && data.servings <= 100 &&
+             data.prepTimeMinutes is number && data.prepTimeMinutes >= 0 && data.prepTimeMinutes <= 1440 &&
+             data.cookTimeMinutes is number && data.cookTimeMinutes >= 0 && data.cookTimeMinutes <= 1440 &&
+             (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() <= 20)) &&
+             data.ingredients is list && data.ingredients.size() <= 100 &&
+             data.instructions is list && data.instructions.size() <= 100 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000));
+    }
+
+    function isValidPantryItem(data) {
+      return data.userId == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 100000 &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 20 &&
+             (!('minQuantity' in data) || (data.minQuantity is number && data.minQuantity >= 0 && data.minQuantity <= 100000)) &&
+             (!('expirationDate' in data) || (data.expirationDate is string && data.expirationDate.size() <= 50));
+    }
+
+    function isValidShoppingItem(data) {
+      return data.userId == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 100000 &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 20 &&
+             data.isPurchased is bool &&
+             (!('recipeSource' in data) || (data.recipeSource is string && data.recipeSource.size() <= 200));
+    }
+
+    // 2. User Subcollections
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+
+      // Recipes subcollection
+      match /recipes/{recipeId} {
+        allow get: if isOwner(userId) && isValidId(recipeId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(recipeId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'title', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'ingredients', 'instructions', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'category', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'difficulty', 'ingredients', 'instructions', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                         isValidRecipe(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(recipeId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'difficulty', 'ingredients', 'instructions', 'notes', 'updatedAt']) &&
+                         isValidRecipe(incoming());
+
+        allow delete: if isOwner(userId) && isValidId(recipeId);
+      }
+
+      // Pantry subcollection
+      match /pantry/{pantryItemId} {
+        allow get: if isOwner(userId) && isValidId(pantryItemId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(pantryItemId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'name', 'quantity', 'unit', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'category', 'quantity', 'unit', 'minQuantity', 'expirationDate', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                         isValidPantryItem(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(pantryItemId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'quantity', 'unit', 'minQuantity', 'expirationDate', 'updatedAt']) &&
+                         isValidPantryItem(incoming());
+
+        allow delete: if isOwner(userId) && isValidId(pantryItemId);
+      }
+
+      // Shopping list subcollection
+      match /shopping_items/{shoppingItemId} {
+        allow get: if isOwner(userId) && isValidId(shoppingItemId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(shoppingItemId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'name', 'quantity', 'unit', 'isPurchased', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'category', 'quantity', 'unit', 'isPurchased', 'recipeSource', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                         isValidShoppingItem(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(shoppingItemId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'quantity', 'unit', 'isPurchased', 'recipeSource', 'updatedAt']) &&
+                         isValidShoppingItem(incoming());
+
+        allow delete: if isOwner(userId) && isValidId(shoppingItemId);
+      }
+    }
+  }
+}

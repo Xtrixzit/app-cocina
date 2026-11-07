@@ -1,0 +1,6 @@
+{
+  "name": "Recetario",
+  "description": "Recetas de cocina con cálculo de porciones, tiempos e inventario de despensa con lista de compras.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

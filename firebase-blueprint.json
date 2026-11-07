@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "Recipe": {
+      "title": "Recipe",
+      "description": "A cooking recipe with ingredient list, preparation instructions, and cooking times.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the recipe" },
+        "userId": { "type": "string", "description": "Owner Google User ID" },
+        "title": { "type": "string", "description": "Title or name of the dish" },
+        "category": { "type": "string", "description": "Category (Desayuno, Almuerzo, Cena, Postre, Snack, etc.)" },
+        "servings": { "type": "number", "description": "Base number of servings" },
+        "prepTimeMinutes": { "type": "number", "description": "Preparation time in minutes" },
+        "cookTimeMinutes": { "type": "number", "description": "Cooking time in minutes" },
+        "difficulty": { "type": "string", "description": "Difficulty level (Fácil, Media, Difícil)" },
+        "ingredients": {
+          "type": "array",
+          "description": "List of ingredient objects with name, amount, unit, category"
+        },
+        "instructions": {
+          "type": "array",
+          "description": "Step-by-step preparation instructions"
+        },
+        "notes": { "type": "string", "description": "Optional notes or chef tips" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+      },
+      "required": ["userId", "title", "servings", "prepTimeMinutes", "cookTimeMinutes", "ingredients", "instructions", "createdAt"]
+    },
+    "PantryItem": {
+      "title": "PantryItem",
+      "description": "An ingredient or provision stocked in the pantry / kitchen inventory.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the pantry item" },
+        "userId": { "type": "string", "description": "Owner Google User ID" },
+        "name": { "type": "string", "description": "Name of the item or ingredient" },
+        "category": { "type": "string", "description": "Category (Verduras, Carnes, Lácteos, Granos, etc.)" },
+        "quantity": { "type": "number", "description": "Current quantity in stock" },
+        "unit": { "type": "string", "description": "Unit of measurement (g, kg, ml, l, u, etc.)" },
+        "minQuantity": { "type": "number", "description": "Threshold minimum quantity before restock warning" },
+        "expirationDate": { "type": "string", "description": "Optional expiration date string YYYY-MM-DD" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+      },
+      "required": ["userId", "name", "quantity", "unit", "createdAt"]
+    },
+    "ShoppingItem": {
+      "title": "ShoppingItem",
+      "description": "An item to buy on the grocery shopping list.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the shopping item" },
+        "userId": { "type": "string", "description": "Owner Google User ID" },
+        "name": { "type": "string", "description": "Name of the item to buy" },
+        "category": { "type": "string", "description": "Category" },
+        "quantity": { "type": "number", "description": "Quantity to buy" },
+        "unit": { "type": "string", "description": "Unit of measurement" },
+        "isPurchased": { "type": "boolean", "description": "Whether the item has been marked as bought" },
+        "recipeSource": { "type": "string", "description": "Optional recipe name source that triggered this item" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+      },
+      "required": ["userId", "name", "quantity", "unit", "isPurchased", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/recipes/{recipeId}": {
+      "schema": { "$ref": "#/entities/Recipe" },
+      "description": "User recipes subcollection scoped by owner UID"
+    },
+    "/users/{userId}/pantry/{pantryItemId}": {
+      "schema": { "$ref": "#/entities/PantryItem" },
+      "description": "User pantry items subcollection scoped by owner UID"
+    },
+    "/users/{userId}/shopping_items/{shoppingItemId}": {
+      "schema": { "$ref": "#/entities/ShoppingItem" },
+      "description": "User shopping list items subcollection scoped by owner UID"
+    }
+  }
+}
