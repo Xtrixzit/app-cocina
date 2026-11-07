@@ -20,6 +20,7 @@ data class RecipeEntity(
     val ingredientsJson: String,
     val instructionsJson: String,
     val notes: String,
+    val imageUrl: String = "",
     val createdAt: Long,
     val updatedAt: Long
 ) {
@@ -34,7 +35,8 @@ data class RecipeEntity(
             difficulty = difficulty,
             ingredients = jsonToIngredients(ingredientsJson),
             instructions = jsonToInstructions(instructionsJson),
-            notes = notes
+            notes = notes,
+            imageUrl = imageUrl
         )
     }
 
@@ -51,6 +53,7 @@ data class RecipeEntity(
                 ingredientsJson = ingredientsToJson(recipe.ingredients),
                 instructionsJson = instructionsToJson(recipe.instructions),
                 notes = recipe.notes,
+                imageUrl = recipe.imageUrl,
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )

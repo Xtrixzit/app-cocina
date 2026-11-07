@@ -13,7 +13,7 @@ import com.example.data.local.entity.ShoppingEntity
 
 @Database(
     entities = [RecipeEntity::class, PantryEntity::class, ShoppingEntity::class],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class CookingDatabase : RoomDatabase() {
@@ -67,6 +67,35 @@ abstract class CookingDatabase : RoomDatabase() {
                     INSTANCE = freshInstance
                     freshInstance
                 }
+            }
+        }
+
+        fun resetDatabase(context: Context): CookingDatabase {
+            synchronized(this) {
+                try {
+                    INSTANCE?.close()
+                } catch (_: Exception) {}
+                INSTANCE = null
+
+                try {
+                    context.applicationContext.deleteDatabase("cooking_pantry_database")
+                } catch (_: Exception) {}
+
+                val freshInstance = Room.databaseBuilder(
+                    context.applicationContext,
+                    CookingDatabase::class.java,
+                    "cooking_pantry_database"
+                )
+                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+
+                try {
+                    freshInstance.openHelper.writableDatabase
+                } catch (_: Exception) {}
+
+                INSTANCE = freshInstance
+                return freshInstance
             }
         }
     }

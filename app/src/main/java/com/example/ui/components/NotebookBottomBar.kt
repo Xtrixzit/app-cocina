@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.CrimsonMarker
 import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItPink
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 
@@ -85,9 +87,15 @@ fun NotebookBottomBar(
             testTag = "tab_shopping"
         ),
         NotebookTabItem(
+            title = "Producción",
+            icon = Icons.Default.Scale,
+            color = PostItYellow,
+            testTag = "tab_production"
+        ),
+        NotebookTabItem(
             title = "Surprise me",
             icon = Icons.Default.AutoAwesome,
-            color = PostItYellow,
+            color = PostItPink,
             testTag = "tab_assistant"
         )
     )
@@ -109,13 +117,13 @@ fun NotebookBottomBar(
             }
             .background(bottomBgColor)
             .navigationBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 4.dp, vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(68.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             tabs.forEachIndexed { index, tab ->
@@ -138,6 +146,7 @@ fun NotebookBottomBar(
                             1 -> Color(0xFF0A341E) // Rich emerald mint chalk
                             2 -> Color(0xFF0B2E47) // Rich sapphire sky chalk
                             3 -> Color(0xFF382E0B) // Rich amber yellow chalk
+                            4 -> Color(0xFF3B1228) // Rich berry pink chalk
                             else -> Color(0xFF27272A)
                         }
                     } else {
@@ -154,6 +163,7 @@ fun NotebookBottomBar(
                             1 -> Color(0xFF86EFAC) // Glowing mint chalk
                             2 -> Color(0xFF7DD3FC) // Glowing sky chalk
                             3 -> Color(0xFFFDE047) // Glowing yellow chalk
+                            4 -> Color(0xFFF472B6) // Glowing pink chalk
                             else -> Color(0xFFF4F4F5)
                         }
                     } else {
@@ -170,6 +180,7 @@ fun NotebookBottomBar(
                             1 -> Color(0xFF22C55E)
                             2 -> Color(0xFF0EA5E9)
                             3 -> Color(0xFFEAB308)
+                            4 -> Color(0xFFEC4899)
                             else -> Color(0xFF71717A)
                         }
                     } else {

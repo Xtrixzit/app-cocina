@@ -55,6 +55,7 @@ import com.example.ui.UiState
 import com.example.ui.screens.CookingAssistantScreen
 import com.example.ui.screens.PantryFormDialog
 import com.example.ui.screens.PantryScreen
+import com.example.ui.screens.ProductionScreen
 import com.example.ui.screens.RecipeDetailScreen
 import com.example.ui.screens.RecipeFormDialog
 import com.example.ui.screens.RecipesScreen
@@ -92,7 +93,7 @@ fun MainFeatureScreen(
     onToggleDarkMode: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Recetas, 1: Despensa, 2: Compras, 3: Asistente
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Recetas, 1: Despensa, 2: Compras, 3: Producción, 4: Asistente
     var showAboutDialog by remember { mutableStateOf(false) }
 
     // Detail and Form dialog states
@@ -123,7 +124,7 @@ fun MainFeatureScreen(
         else -> 0
     }
 
-    // Recipes state for Assistant
+    // Recipes state for Assistant and Production
     val recipesUiState by viewModel.recipesState.collectAsState()
     val recipesList = when (val s = recipesUiState) {
         is UiState.Success -> s.data
@@ -175,7 +176,8 @@ fun MainFeatureScreen(
                             val title = when (selectedTab) {
                                 1 -> "Mi Despensa"
                                 2 -> "Check List • Compras"
-                                3 -> "Surprise Me • Asistente"
+                                3 -> "Cálculo de Producción"
+                                4 -> "Surprise Me • Asistente"
                                 else -> "Recetario"
                             }
                             Text(
@@ -240,7 +242,8 @@ fun MainFeatureScreen(
                                 showRecipeForm = true
                             },
                             onNavigateToCheckList = { selectedTab = 2 },
-                            onNavigateToSurpriseMe = { selectedTab = 3 },
+                            onNavigateToProduction = { selectedTab = 3 },
+                            onNavigateToSurpriseMe = { selectedTab = 4 },
                             onShowHelp = { showAboutDialog = true }
                         )
                         1 -> PantryScreen(
@@ -251,7 +254,12 @@ fun MainFeatureScreen(
                             viewModel = viewModel,
                             pantryItems = pantryItems
                         )
-                        3 -> CookingAssistantScreen(
+                        3 -> ProductionScreen(
+                            viewModel = viewModel,
+                            recipes = recipesList,
+                            pantryItems = pantryItems
+                        )
+                        4 -> CookingAssistantScreen(
                             viewModel = viewModel,
                             recipes = recipesList,
                             pantryItems = pantryItems,

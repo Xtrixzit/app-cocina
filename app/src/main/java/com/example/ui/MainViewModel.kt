@@ -286,6 +286,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deductPantryStockForProduction(
+        recipe: Recipe,
+        scaleFactor: Double,
+        currentPantry: List<PantryItem>
+    ) {
+        viewModelScope.launch {
+            try {
+                var deductedCount = 0
+                for (ing in recipe.ingredients) {
+                    val needed = ing.amount * scaleFactor
+                    val match = currentPantry.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
+                    if (match != null) {
+                        val newQty = (match.quantity - needed).coerceAtLeast(0.0)
+                        repository.updatePantryStock(match.id, newQty)
+                        deductedCount++
+                    }
+                }
+                _userMessage.emit("¡Producción registrada! Se actualizaron $deductedCount ingredientes en la despensa.")
+            } catch (e: Exception) {
+                _userMessage.emit("Error al descontar ingredientes: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun addProductionShortageToShoppingList(
+        recipe: Recipe,
+        scaleFactor: Double,
+        currentPantry: List<PantryItem>,
+        targetUnitsLabel: String
+    ) {
+        viewModelScope.launch {
+            try {
+                var addedCount = 0
+                for (ingredient in recipe.ingredients) {
+                    val neededAmount = Math.round(ingredient.amount * scaleFactor * 100.0) / 100.0
+                    val matching = currentPantry.find {
+                        it.name.trim().equals(ingredient.name.trim(), ignoreCase = true)
+                    }
+                    val available = matching?.quantity ?: 0.0
+
+                    if (available < neededAmount) {
+                        val shortage = Math.round((neededAmount - available) * 100.0) / 100.0
+                        val shoppingItem = ShoppingItem(
+                            name = ingredient.name,
+                            category = ingredient.category,
+                            quantity = shortage,
+                            unit = ingredient.unit,
+                            isPurchased = false,
+                            recipeSource = "Producción: ${recipe.title} ($targetUnitsLabel)"
+                        )
+                        repository.saveShoppingItem(shoppingItem, syncToPantry = false)
+                        addedCount++
+                    }
+                }
+                if (addedCount > 0) {
+                    _userMessage.emit("Se añadieron $addedCount ingredientes faltantes a la Check list de compras")
+                } else {
+                    _userMessage.emit("¡Cuentas con suficiente stock para toda la producción!")
+                }
+            } catch (e: Exception) {
+                _userMessage.emit("Error al agregar a compras: ${e.localizedMessage}")
+            }
+        }
+    }
+
     // Helper: calculate feasibility for recipes based on current pantry
     fun calculateRecipeFeasibilities(
         recipes: List<Recipe>,
@@ -319,5 +384,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 missingIngredients = missing
             )
         }.sortedByDescending { it.matchPercentage }
+    }
+
+    fun resetDatabase() {
+        viewModelScope.launch {
+            try {
+                repository.resetDatabase()
+                _userMessage.emit("Base de datos restablecida correctamente.")
+            } catch (e: Exception) {
+                _userMessage.emit("Error al restablecer base de datos: ${e.localizedMessage}")
+            }
+        }
     }
 }

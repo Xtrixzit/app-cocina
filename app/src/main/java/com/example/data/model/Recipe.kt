@@ -27,6 +27,7 @@ data class Recipe(
     val ingredients: List<RecipeIngredient> = emptyList(),
     val instructions: List<String> = emptyList(),
     val notes: String = "",
+    val imageUrl: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {

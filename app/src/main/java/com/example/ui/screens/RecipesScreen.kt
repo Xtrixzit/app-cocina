@@ -55,6 +55,7 @@ fun RecipesScreen(
     onSelectRecipe: (Recipe) -> Unit,
     onAddNewRecipe: () -> Unit,
     onNavigateToCheckList: () -> Unit = {},
+    onNavigateToProduction: () -> Unit = {},
     onNavigateToSurpriseMe: () -> Unit = {},
     onShowHelp: () -> Unit = {}
 ) {
@@ -122,41 +123,52 @@ fun RecipesScreen(
                     )
                 }
 
-                // Reference style Post-It Quick Action Buttons: [Check list]  [Surprise me]  [Help]
+                // Reference style Post-It Quick Action Buttons: [Producción] [Check list] [Surprise me] [Ayuda]
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     com.example.ui.components.PostItButton(
+                        text = "Producción",
+                        onClick = onNavigateToProduction,
+                        backgroundColor = com.example.ui.theme.PostItYellow,
+                        rotationDegrees = -1.2f,
+                        fontSize = 18.sp,
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .testTag("postit_quick_production")
+                    )
+
+                    com.example.ui.components.PostItButton(
                         text = "Check list",
                         onClick = onNavigateToCheckList,
-                        backgroundColor = com.example.ui.theme.PostItYellow,
-                        rotationDegrees = -1.5f,
-                        fontSize = 20.sp,
+                        backgroundColor = com.example.ui.theme.PostItSky,
+                        rotationDegrees = 1.0f,
+                        fontSize = 18.sp,
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(1.0f)
                             .testTag("postit_quick_checklist")
                     )
 
                     com.example.ui.components.PostItButton(
-                        text = "Surprise me",
+                        text = "Surprise",
                         onClick = onNavigateToSurpriseMe,
                         backgroundColor = com.example.ui.theme.PostItMint,
-                        rotationDegrees = 1.2f,
-                        fontSize = 20.sp,
+                        rotationDegrees = -0.8f,
+                        fontSize = 18.sp,
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(0.9f)
                             .testTag("postit_quick_surpriseme")
                     )
 
                     com.example.ui.components.PostItButton(
                         text = "Ayuda",
                         onClick = onShowHelp,
-                        backgroundColor = com.example.ui.theme.PostItSky,
-                        rotationDegrees = -1.0f,
-                        fontSize = 20.sp,
+                        backgroundColor = com.example.ui.theme.PostItPeach,
+                        rotationDegrees = 1.2f,
+                        fontSize = 18.sp,
                         modifier = Modifier.testTag("postit_quick_help")
                     )
                 }
@@ -222,13 +234,46 @@ fun RecipesScreen(
                     }
                 }
                 is UiState.Error -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = state.message,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .sketchedBorder(color = MaterialTheme.colorScheme.error, strokeWidthDp = 2f)
+                                .padding(16.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Actualización de base de datos requerida",
+                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Se detectó una versión anterior de la base de datos local. Pulsa el botón para actualizarla y cargar tus recetas limpiamente.",
+                                    fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                    fontSize = 17.sp,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                com.example.ui.components.PostItButton(
+                                    text = "Restablecer y Actualizar Base de Datos",
+                                    onClick = { viewModel.resetDatabase() },
+                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                    fontSize = 20.sp,
+                                    modifier = Modifier.testTag("reset_database_button")
+                                )
+                            }
+                        }
                     }
                 }
                 is UiState.Success -> {

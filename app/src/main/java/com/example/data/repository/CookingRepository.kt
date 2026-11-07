@@ -20,19 +20,39 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class CookingRepository(
-    private val database: CookingDatabase
+    private var database: CookingDatabase,
+    private val appContext: Context? = null
 ) {
-    constructor(context: Context) : this(CookingDatabase.getDatabase(context))
+    constructor(context: Context) : this(CookingDatabase.getDatabase(context), context.applicationContext)
 
-    private val recipeDao = database.recipeDao()
-    private val pantryDao = database.pantryDao()
-    private val shoppingDao = database.shoppingDao()
+    private var recipeDao = database.recipeDao()
+    private var pantryDao = database.pantryDao()
+    private var shoppingDao = database.shoppingDao()
+
+    suspend fun resetDatabase() = withContext(Dispatchers.IO) {
+        if (appContext != null) {
+            database = CookingDatabase.resetDatabase(appContext)
+            recipeDao = database.recipeDao()
+            pantryDao = database.pantryDao()
+            shoppingDao = database.shoppingDao()
+            seedSampleRecipes()
+        }
+    }
 
     // --- RECIPES ---
 
     fun observeRecipes(): Flow<List<Recipe>> {
         return recipeDao.getAllRecipes()
             .map { list -> list.map { it.toDomain() } }
+            .catch { e ->
+                if ((e.message?.contains("Room cannot verify the data integrity", ignoreCase = true) == true ||
+                     e.message?.contains("identity hash", ignoreCase = true) == true) && appContext != null) {
+                    resetDatabase()
+                    emitAll(observeRecipes())
+                } else {
+                    throw e
+                }
+            }
             .flowOn(Dispatchers.IO)
     }
 
@@ -51,6 +71,15 @@ class CookingRepository(
     fun observePantry(): Flow<List<PantryItem>> {
         return pantryDao.getAllPantryItems()
             .map { list -> list.map { it.toDomain() } }
+            .catch { e ->
+                if ((e.message?.contains("Room cannot verify the data integrity", ignoreCase = true) == true ||
+                     e.message?.contains("identity hash", ignoreCase = true) == true) && appContext != null) {
+                    resetDatabase()
+                    emitAll(observePantry())
+                } else {
+                    throw e
+                }
+            }
             .flowOn(Dispatchers.IO)
     }
 
@@ -74,6 +103,15 @@ class CookingRepository(
     fun observeShoppingList(): Flow<List<ShoppingItem>> {
         return shoppingDao.getAllShoppingItems()
             .map { list -> list.map { it.toDomain() } }
+            .catch { e ->
+                if ((e.message?.contains("Room cannot verify the data integrity", ignoreCase = true) == true ||
+                     e.message?.contains("identity hash", ignoreCase = true) == true) && appContext != null) {
+                    resetDatabase()
+                    emitAll(observeShoppingList())
+                } else {
+                    throw e
+                }
+            }
             .flowOn(Dispatchers.IO)
     }
 
