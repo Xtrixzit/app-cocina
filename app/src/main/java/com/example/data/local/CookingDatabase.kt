@@ -40,7 +40,8 @@ abstract class CookingDatabase : RoomDatabase() {
                         .build()
 
                     // Force Room to open the SQLite file and verify checkIdentity(db) immediately
-                    instance.openHelper.writableDatabase
+                    val db = instance.openHelper.writableDatabase
+                    db.query(androidx.sqlite.db.SimpleSQLiteQuery("SELECT count(*) FROM sqlite_master")).use { it.moveToFirst() }
 
                     INSTANCE = instance
                     instance
@@ -61,7 +62,8 @@ abstract class CookingDatabase : RoomDatabase() {
                         .build()
 
                     try {
-                        freshInstance.openHelper.writableDatabase
+                        val freshDb = freshInstance.openHelper.writableDatabase
+                        freshDb.query(androidx.sqlite.db.SimpleSQLiteQuery("SELECT count(*) FROM sqlite_master")).use { it.moveToFirst() }
                     } catch (_: Exception) {}
 
                     INSTANCE = freshInstance

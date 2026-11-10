@@ -210,13 +210,46 @@ fun PantryScreen(
                     }
                 }
                 is UiState.Error -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = state.message,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .sketchedBorder(color = MaterialTheme.colorScheme.error, strokeWidthDp = 2f)
+                                .padding(16.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Error al cargar despensa",
+                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = state.message,
+                                    fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                    fontSize = 16.sp,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                com.example.ui.components.PostItButton(
+                                    text = "Restablecer y Actualizar Base de Datos",
+                                    onClick = { viewModel.resetDatabase() },
+                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.testTag("reset_db_pantry")
+                                )
+                            }
+                        }
                     }
                 }
                 is UiState.Success -> {

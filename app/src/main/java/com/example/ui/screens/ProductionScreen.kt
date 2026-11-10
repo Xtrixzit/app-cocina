@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
@@ -135,6 +136,10 @@ fun ProductionScreen(
     var showDeductConfirmDialog by remember { mutableStateOf(false) }
 
     val categories = listOf("Todas", "Desayunos", "Almuerzos", "Cenas", "Postres", "Snacks", "Bebidas", "Sopas")
+
+    BackHandler(enabled = selectedRecipe != null) {
+        selectedRecipe = null
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
