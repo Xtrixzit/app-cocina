@@ -79,6 +79,7 @@
     <string name="license_required_desc">This private edition requires an active license linked to your account to continue.</string>
     <string name="license_activated_msg">License activated successfully.</string>
     <string name="license_invalid_msg">Invalid license key or already claimed by another account.</string>
+    <string name="cloud_feature_requires_google">Sign in with Google to verify licenses or cloud updates.</string>
 
     <!-- Privacy Policy -->
     <string name="privacy_title">Privacy Policy</string>

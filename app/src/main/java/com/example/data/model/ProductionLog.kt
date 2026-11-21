@@ -18,6 +18,7 @@ data class ProductionLog(
     val currencyCode: String = "USD",
     val marginPercent: Int = 30,
     val suggestedPrice: Double = 0.0,
+    val deductedIngredientsCount: Int = 0,
     val createdAt: Timestamp? = null
 ) {
     val estimatedProfit: Double
@@ -32,7 +33,8 @@ data class DistributionConfig(
     val minRequiredVersionCode: Int = 0,
     val updateUrl: String = "",
     val updateNotes: String = "",
-    val requireLicense: Boolean = false
+    val requireLicense: Boolean = false,
+    val supportContact: String = ""
 )
 
 @Keep
@@ -40,7 +42,9 @@ data class DistributionConfig(
 data class LicenseRecord(
     @DocumentId val code: String = "",
     val active: Boolean = false,
-    val assignedUserId: String = "",
+    val assignedUid: String = "",
+    val assignedEmail: String = "",
+    val activatedAt: Timestamp? = null,
     val tier: String = "pro",
     val notes: String = ""
 )

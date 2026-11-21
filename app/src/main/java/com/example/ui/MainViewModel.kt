@@ -446,10 +446,11 @@ class MainViewModel(
                         totalCost = batchTotalCost,
                         currencyCode = currency.code,
                         marginPercent = marginPercent,
-                        suggestedPrice = suggestedPrice
+                        suggestedPrice = suggestedPrice,
+                        deductedIngredientsCount = deductedCount
                     ),
                     isGuestMode = isGuestMode
-                )
+                ).getOrThrow()
 
                 _userMessage.emit(str(R.string.vm_production_recorded, deductedCount))
             } catch (e: CancellationException) {
@@ -604,9 +605,7 @@ class MainViewModel(
     fun activateLicense(code: String) {
         viewModelScope.launch {
             if (isGuestMode) {
-                AppSettingsPreferences.setLicenseKey(repository.context, code)
-                _licenseValidated.value = true
-                _userMessage.emit(str(R.string.license_activated_msg))
+                _userMessage.emit(str(R.string.cloud_feature_requires_google))
                 return@launch
             }
             repository.verifyOrClaimLicense(currentUserId, code)
@@ -622,6 +621,10 @@ class MainViewModel(
 
     fun checkUpdatesManual(currentVersionCode: Int, currentVersionName: String, onUpdateFound: (DistributionConfig) -> Unit) {
         viewModelScope.launch {
+            if (isGuestMode) {
+                _userMessage.emit(str(R.string.cloud_feature_requires_google))
+                return@launch
+            }
             val cfg = repository.fetchDistributionConfig()
             _distributionConfig.value = cfg
             if (cfg != null && cfg.latestVersionCode > currentVersionCode) {

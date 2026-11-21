@@ -1034,10 +1034,8 @@ class CookingRepository(
         return productionLogsCol(userId)
             .snapshots()
             .map { snapshot ->
-                snapshot.toObjects(
-                    ProductionLog::class.java,
-                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                ).sortedByDescending { it.createdAt ?: Timestamp(0, 0) }
+                snapshot.documents.map(::snapshotToProductionLog)
+                    .sortedByDescending { it.createdAt ?: Timestamp(0, 0) }
             }
     }
 
@@ -1051,7 +1049,7 @@ class CookingRepository(
         }
         val uid = requireCloudUserId(userId)
         productionLogsCol(uid).get(source).await()
-            .toObjects(ProductionLog::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            .documents.map(::snapshotToProductionLog)
             .sortedByDescending { it.createdAt ?: Timestamp(0, 0) }
     }
 
@@ -1077,17 +1075,23 @@ class CookingRepository(
         val path = "users/$userId/production_logs/$docId"
         try {
             val uid = requireCloudUserId(userId)
+            val safeRecipeId = log.recipeId.trim().ifBlank { docId }.take(128)
             val safeTitle = log.recipeTitle.trim().ifBlank { "Receta" }.take(200)
+            val safeScale = if (log.scaleFactor.isFinite() && log.scaleFactor > 0.0) {
+                log.scaleFactor.coerceIn(0.01, 10_000.0)
+            } else {
+                1.0
+            }
             val payload = mapOf(
                 "userId" to uid,
-                "recipeId" to log.recipeId.trim().take(128),
+                "recipeId" to safeRecipeId,
                 "recipeTitle" to safeTitle,
-                "targetServings" to log.targetServings.coerceIn(1, 100_000),
-                "scaleFactor" to log.scaleFactor.coerceIn(0.0, 100_000.0),
-                "totalCost" to log.totalCost.coerceIn(0.0, 1_000_000_000.0),
-                "currencyCode" to log.currencyCode.ifBlank { "USD" }.take(10),
-                "marginPercent" to log.marginPercent.coerceIn(0, 500),
-                "suggestedPrice" to log.suggestedPrice.coerceIn(0.0, 1_000_000_000.0),
+                "servingsProduced" to log.targetServings.coerceIn(1, 100_000),
+                "scaleFactor" to safeScale,
+                "totalCost" to log.totalCost.coerceIn(0.0, 100_000_000.0),
+                "suggestedSellingPrice" to log.suggestedPrice.coerceIn(0.0, 100_000_000.0),
+                "currencyCode" to log.currencyCode.trim().ifBlank { "USD" }.take(16),
+                "deductedIngredientsCount" to log.deductedIngredientsCount.coerceIn(0, 500),
                 "createdAt" to FieldValue.serverTimestamp()
             )
             productionLogsCol(uid).document(docId).set(payload).await()
@@ -1098,6 +1102,36 @@ class CookingRepository(
             handleFirestoreError(e, OperationType.WRITE, path)
             Result.failure(e)
         }
+    }
+
+    private fun snapshotToProductionLog(doc: DocumentSnapshot): ProductionLog {
+        val servings = (doc.get("servingsProduced") as? Number)?.toInt()
+            ?: (doc.get("targetServings") as? Number)?.toInt()
+            ?: 1
+        val totalCost = (doc.get("totalCost") as? Number)?.toDouble() ?: 0.0
+        val suggestedPrice = (doc.get("suggestedSellingPrice") as? Number)?.toDouble()
+            ?: (doc.get("suggestedPrice") as? Number)?.toDouble()
+            ?: 0.0
+        val computedMargin = (doc.get("marginPercent") as? Number)?.toInt()
+            ?: if (totalCost > 0.0 && suggestedPrice >= totalCost) {
+                Math.round(((suggestedPrice - totalCost) / totalCost) * 100.0).toInt().coerceIn(0, 500)
+            } else {
+                30
+            }
+        return ProductionLog(
+            id = doc.id,
+            userId = doc.getString("userId").orEmpty(),
+            recipeId = doc.getString("recipeId").orEmpty(),
+            recipeTitle = doc.getString("recipeTitle").orEmpty(),
+            targetServings = servings.coerceAtLeast(1),
+            scaleFactor = (doc.get("scaleFactor") as? Number)?.toDouble() ?: 1.0,
+            totalCost = totalCost,
+            currencyCode = doc.getString("currencyCode").orEmpty().ifBlank { "USD" },
+            marginPercent = computedMargin,
+            suggestedPrice = suggestedPrice,
+            deductedIngredientsCount = (doc.get("deductedIngredientsCount") as? Number)?.toInt() ?: 0,
+            createdAt = doc.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+        )
     }
 
     // --- GUEST TO CLOUD MIGRATION & FULL BACKUP ---
@@ -1251,7 +1285,23 @@ class CookingRepository(
         if (auth.currentUser == null) return@withContext null
         try {
             val doc = firestore.collection("app_config").document("distribution").get(Source.DEFAULT).await()
-            if (doc.exists()) doc.toObject(DistributionConfig::class.java) else null
+            if (doc.exists()) {
+                DistributionConfig(
+                    latestVersionCode = (doc.get("latestVersionCode") as? Number)?.toInt() ?: 0,
+                    latestVersionName = doc.getString("latestVersionName").orEmpty(),
+                    minRequiredVersionCode = (doc.get("minRequiredVersionCode") as? Number)?.toInt() ?: 0,
+                    updateUrl = doc.getString("updateUrl").orEmpty().ifBlank {
+                        doc.getString("downloadUrl").orEmpty()
+                    },
+                    updateNotes = doc.getString("updateNotes").orEmpty().ifBlank {
+                        doc.getString("releaseNotes").orEmpty()
+                    },
+                    requireLicense = doc.getBoolean("requireLicense") ?: false,
+                    supportContact = doc.getString("supportContact").orEmpty()
+                )
+            } else {
+                null
+            }
         } catch (_: Exception) {
             null
         }
@@ -1259,8 +1309,8 @@ class CookingRepository(
 
     suspend fun verifyOrClaimLicense(userId: String, rawCode: String): Result<LicenseRecord> = withContext(Dispatchers.IO) {
         val cleanCode = rawCode.trim()
-        if (cleanCode.isBlank()) {
-            return@withContext Result.failure(IllegalArgumentException("Empty license key"))
+        if (!cleanCode.matches("^[a-zA-Z0-9_\\-]{1,128}$".toRegex())) {
+            return@withContext Result.failure(IllegalArgumentException("Invalid license key format"))
         }
         try {
             val uid = requireCloudUserId(userId)
@@ -1270,23 +1320,47 @@ class CookingRepository(
             } catch (_: Exception) {
                 docRef.get(Source.DEFAULT).await()
             }
-            val record = if (snap.exists()) snap.toObject(LicenseRecord::class.java) else null
-            if (record == null || !record.active) {
-                return@withContext Result.failure(IllegalStateException("Invalid or inactive license"))
+            if (!snap.exists()) {
+                return@withContext Result.failure(IllegalStateException("License not found"))
             }
-            if (record.assignedUserId.isNotBlank() && record.assignedUserId != uid) {
+            val active = snap.getBoolean("active") ?: false
+            val assignedUid = snap.getString("assignedUid").orEmpty().ifBlank {
+                snap.getString("assignedUserId").orEmpty()
+            }
+            val assignedEmail = snap.getString("assignedEmail").orEmpty()
+            val activatedAt = snap.getTimestamp("activatedAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val tier = snap.getString("tier").orEmpty().ifBlank { "pro" }
+            val notes = snap.getString("notes").orEmpty()
+
+            if (!active) {
+                return@withContext Result.failure(IllegalStateException("Inactive license"))
+            }
+            if (assignedUid.isNotBlank() && assignedUid != uid) {
                 return@withContext Result.failure(IllegalStateException("License already claimed"))
             }
-            if (record.assignedUserId.isBlank()) {
+
+            val userEmail = (auth.currentUser?.email ?: "").trim().take(200)
+            if (assignedUid.isBlank()) {
                 docRef.update(
                     mapOf(
-                        "assignedUserId" to uid,
-                        "updatedAt" to FieldValue.serverTimestamp()
+                        "assignedUid" to uid,
+                        "assignedEmail" to userEmail,
+                        "activatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
             }
             AppSettingsPreferences.setLicenseKey(appContext, cleanCode)
-            Result.success(record.copy(code = cleanCode, assignedUserId = uid))
+            Result.success(
+                LicenseRecord(
+                    code = cleanCode,
+                    active = true,
+                    assignedUid = uid,
+                    assignedEmail = assignedEmail.ifBlank { userEmail },
+                    activatedAt = activatedAt,
+                    tier = tier,
+                    notes = notes
+                )
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

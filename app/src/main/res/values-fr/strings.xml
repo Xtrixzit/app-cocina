@@ -79,6 +79,7 @@
     <string name="license_required_desc">Cette édition privée nécessite une licence active liée à votre compte pour continuer.</string>
     <string name="license_activated_msg">Licence activée avec succès.</string>
     <string name="license_invalid_msg">Clé de licence invalide ou déjà utilisée par un autre compte.</string>
+    <string name="cloud_feature_requires_google">Connectez-vous avec Google pour vérifier les licences ou mises à jour cloud.</string>
 
     <!-- Privacy Policy -->
     <string name="privacy_title">Politique de Confidentialité</string>

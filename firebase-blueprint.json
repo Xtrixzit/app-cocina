@@ -106,8 +106,9 @@
       "properties": {
         "latestVersionCode": { "type": "number", "description": "Latest published Android versionCode" },
         "latestVersionName": { "type": "string", "description": "Latest published versionName" },
-        "downloadUrl": { "type": "string", "description": "Private HTTPS link to latest APK release" },
-        "releaseNotes": { "type": "string", "description": "Changelog summary" },
+        "minRequiredVersionCode": { "type": "number", "description": "Minimum required versionCode before forced update prompt" },
+        "downloadUrl": { "type": "string", "description": "Private HTTPS link to latest APK release (also accepts updateUrl)" },
+        "releaseNotes": { "type": "string", "description": "Changelog summary (also accepts updateNotes)" },
         "requireLicense": { "type": "boolean", "description": "Whether license activation is enforced for cloud access" },
         "supportContact": { "type": "string", "description": "Support email or contact info" }
       }

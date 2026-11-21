@@ -455,4 +455,28 @@ class ExampleRobolectricTest {
         assertEquals("$0.0020", AppSettingsPreferences.formatMoney(0.002, CurrencyOption.USD, forceFourDecimalsIfTiny = true))
         assertEquals("R$10.00", AppSettingsPreferences.formatMoney(10.0, CurrencyOption.BRL))
     }
+
+    @Test
+    fun `commercial distribution and license models align with firestore schema`() {
+        val dist = com.example.data.model.DistributionConfig(
+            latestVersionCode = 14,
+            latestVersionName = "3.1",
+            minRequiredVersionCode = 13,
+            updateUrl = "https://example.com/Recetario-v3.1.apk",
+            updateNotes = "Mejoras",
+            requireLicense = true,
+            supportContact = "soporte@example.com"
+        )
+        assertEquals(14, dist.latestVersionCode)
+        assertTrue(dist.requireLicense)
+
+        val license = com.example.data.model.LicenseRecord(
+            code = "REC-PRO-2026",
+            active = true,
+            assignedUid = "uid_123",
+            assignedEmail = "buyer@example.com"
+        )
+        assertEquals("uid_123", license.assignedUid)
+        assertTrue(license.active)
+    }
 }
