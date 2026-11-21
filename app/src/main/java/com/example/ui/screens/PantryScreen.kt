@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,26 +22,16 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -55,34 +42,48 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.ShoppingItem
+import com.example.settings.AppSettingsPreferences
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
 import com.example.ui.components.PantryItemCard
+import com.example.ui.components.PostItButton
+import com.example.ui.components.PostItFilterChip
 import com.example.ui.components.ShareInventoryDialog
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
-import com.example.ui.components.stampClickable
-import com.example.ui.theme.StockGreen
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
+import com.example.ui.theme.PostItMint
+import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItSky
+import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
+import com.example.util.LocalizedLabels
 
 @Composable
 fun PantryScreen(
     viewModel: MainViewModel,
     onAddNewItem: () -> Unit
 ) {
+    val context = LocalContext.current
     val pantryUiState by viewModel.pantryState.collectAsState()
     val searchQuery by viewModel.pantrySearchQuery.collectAsState()
     val selectedCategory by viewModel.selectedPantryCategory.collectAsState()
     val onlyLowStock by viewModel.filterOnlyLowStock.collectAsState()
+    val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
 
     var editingItem by remember { mutableStateOf<PantryItem?>(null) }
     var showShareDialog by remember { mutableStateOf(false) }
@@ -92,11 +93,11 @@ fun PantryScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            com.example.ui.components.PostItButton(
-                text = "+ Añadir Provisión",
+            PostItButton(
+                text = stringResource(R.string.pantry_fab_add),
                 icon = Icons.Default.Add,
                 onClick = onAddNewItem,
-                backgroundColor = com.example.ui.theme.PostItPeach,
+                backgroundColor = PostItPeach,
                 rotationDegrees = -2f,
                 modifier = Modifier.testTag("add_pantry_fab")
             )
@@ -108,7 +109,6 @@ fun PantryScreen(
                 .padding(padding)
                 .notebookPaperBackground()
         ) {
-            // Sketched Box Header matching notebook style
             Box(
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -116,14 +116,14 @@ fun PantryScreen(
                     .padding(horizontal = 14.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "Inventory & Provisions",
-                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                    text = stringResource(R.string.pantry_header),
+                    fontFamily = CaveatFontFamily,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
-            // Search Bar & Share Button Row
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -135,8 +135,8 @@ fun PantryScreen(
                     onValueChange = { viewModel.pantrySearchQuery.value = it },
                     placeholder = {
                         Text(
-                            "Buscar provisión...",
-                            fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                            stringResource(R.string.pantry_search_hint),
+                            fontFamily = PatrickHandFontFamily,
                             fontSize = 17.sp
                         )
                     },
@@ -144,7 +144,7 @@ fun PantryScreen(
                     trailingIcon = {
                         if (searchQuery.isNotBlank()) {
                             IconButton(onClick = { viewModel.pantrySearchQuery.value = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Limpiar", tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear), tint = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     },
@@ -157,47 +157,44 @@ fun PantryScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                com.example.ui.components.PostItButton(
-                    text = "Sincronizar",
+                PostItButton(
+                    text = stringResource(R.string.pantry_sync_btn),
                     icon = Icons.Default.Sync,
                     onClick = { showShareDialog = true },
-                    backgroundColor = com.example.ui.theme.PostItSky,
+                    backgroundColor = PostItSky,
                     rotationDegrees = 1f,
                     fontSize = 18.sp,
                     modifier = Modifier.testTag("share_inventory_button")
                 )
             }
 
-            // Post-It Filter chips
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(vertical = 4.dp)
             ) {
-                // Low stock toggle chip
                 item {
-                    com.example.ui.components.PostItFilterChip(
+                    PostItFilterChip(
                         selected = onlyLowStock,
                         onClick = { viewModel.filterOnlyLowStock.value = !onlyLowStock },
-                        text = "⚠ Stock Bajo",
-                        selectedColor = com.example.ui.theme.PostItPeach,
+                        text = stringResource(R.string.pantry_filter_low),
+                        selectedColor = PostItPeach,
                         modifier = Modifier.testTag("filter_low_stock")
                     )
                 }
 
                 items(categories) { cat ->
                     val color = when (cat) {
-                        "Todas" -> com.example.ui.theme.PostItYellow
-                        "Despensa" -> com.example.ui.theme.PostItMint
-                        "Verduras" -> com.example.ui.theme.PostItMint
-                        "Carnes" -> com.example.ui.theme.PostItPeach
-                        "Lácteos" -> com.example.ui.theme.PostItSky
-                        else -> com.example.ui.theme.PostItYellow
+                        "Todas" -> PostItYellow
+                        "Despensa", "Verduras" -> PostItMint
+                        "Carnes" -> PostItPeach
+                        "Lácteos" -> PostItSky
+                        else -> PostItYellow
                     }
-                    com.example.ui.components.PostItFilterChip(
+                    PostItFilterChip(
                         selected = selectedCategory == cat,
                         onClick = { viewModel.selectedPantryCategory.value = cat },
-                        text = cat,
+                        text = LocalizedLabels.pantryCategory(context, cat),
                         selectedColor = color
                     )
                 }
@@ -225,8 +222,8 @@ fun PantryScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Error al cargar despensa",
-                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    text = stringResource(R.string.pantry_load_error),
+                                    fontFamily = CaveatFontFamily,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error,
@@ -235,16 +232,16 @@ fun PantryScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = state.message,
-                                    fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                    fontFamily = PatrickHandFontFamily,
                                     fontSize = 16.sp,
                                     textAlign = TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
-                                com.example.ui.components.PostItButton(
-                                    text = "Restablecer y Actualizar Base de Datos",
-                                    onClick = { viewModel.resetDatabase() },
-                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                PostItButton(
+                                    text = stringResource(R.string.action_retry_sync),
+                                    onClick = { viewModel.retryCloudSync() },
+                                    backgroundColor = PostItYellow,
                                     fontSize = 18.sp,
                                     modifier = Modifier.testTag("reset_db_pantry")
                                 )
@@ -264,7 +261,6 @@ fun PantryScreen(
                         matchesLow && matchesCat && matchesSearch
                     }
 
-                    // Modern Stock Banner with Sharing and Restock triggers
                     if (allItems.isNotEmpty()) {
                         Card(
                             modifier = Modifier
@@ -276,20 +272,21 @@ fun PantryScreen(
                             )
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
+                                val restockSource = stringResource(R.string.pantry_restock_source)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        MetricPill(label = "Total", value = "${allItems.size}", color = MaterialTheme.colorScheme.primary)
-                                        MetricPill(label = "Bajo", value = "${lowStockItems.size - outOfStockItems.size}", color = StockYellow)
-                                        MetricPill(label = "Agotado", value = "${outOfStockItems.size}", color = StockRed)
+                                        MetricPill(label = stringResource(R.string.pantry_metric_total), value = "${allItems.size}", color = MaterialTheme.colorScheme.primary)
+                                        MetricPill(label = stringResource(R.string.pantry_metric_low), value = "${lowStockItems.size - outOfStockItems.size}", color = StockYellow)
+                                        MetricPill(label = stringResource(R.string.pantry_metric_out), value = "${outOfStockItems.size}", color = StockRed)
                                     }
 
                                     if (lowStockItems.isNotEmpty()) {
-                                        com.example.ui.components.PostItButton(
-                                            text = "Reponer (${lowStockItems.size})",
+                                        PostItButton(
+                                            text = stringResource(R.string.pantry_restock_btn, lowStockItems.size),
                                             icon = Icons.Default.ShoppingCart,
                                             onClick = {
                                                 for (item in lowStockItems) {
@@ -306,12 +303,12 @@ fun PantryScreen(
                                                             quantity = Math.round(needed * 100.0) / 100.0,
                                                             unit = item.unit,
                                                             isPurchased = false,
-                                                            recipeSource = "Reposición de Despensa"
+                                                            recipeSource = restockSource
                                                         )
                                                     )
                                                 }
                                             },
-                                            backgroundColor = com.example.ui.theme.PostItPeach,
+                                            backgroundColor = PostItPeach,
                                             fontSize = 18.sp,
                                             rotationDegrees = -1f,
                                             modifier = Modifier.testTag("restock_shopping_button")
@@ -338,8 +335,12 @@ fun PantryScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = if (onlyLowStock) "¡Excelente! No tienes provisiones con stock bajo" else if (searchQuery.isNotBlank()) "No se encontraron provisiones" else "Tu despensa está vacía",
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = when {
+                                    onlyLowStock -> stringResource(R.string.pantry_empty_low_title)
+                                    searchQuery.isNotBlank() -> stringResource(R.string.pantry_empty_search_title)
+                                    else -> stringResource(R.string.pantry_empty_title)
+                                },
+                                fontFamily = CaveatFontFamily,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -347,26 +348,30 @@ fun PantryScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = if (onlyLowStock) "Todos tus ingredientes superan el stock mínimo configurado." else if (searchQuery.isNotBlank()) "Intenta buscar con otro nombre." else "Registra tus víveres o sincroniza el inventario desde otro teléfono.",
-                                fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                text = when {
+                                    onlyLowStock -> stringResource(R.string.pantry_empty_low_sub)
+                                    searchQuery.isNotBlank() -> stringResource(R.string.pantry_empty_search_sub)
+                                    else -> stringResource(R.string.pantry_empty_sub)
+                                },
+                                fontFamily = PatrickHandFontFamily,
                                 fontSize = 17.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                com.example.ui.components.PostItButton(
-                                    text = "Añadir producto",
+                                PostItButton(
+                                    text = stringResource(R.string.pantry_add_btn),
                                     onClick = onAddNewItem,
-                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                    backgroundColor = PostItYellow,
                                     fontSize = 18.sp,
                                     modifier = Modifier.testTag("empty_pantry_add_button")
                                 )
-                                com.example.ui.components.PostItButton(
-                                    text = "Recibir de otro teléfono",
+                                PostItButton(
+                                    text = stringResource(R.string.pantry_receive_btn),
                                     icon = Icons.Default.Sync,
                                     onClick = { showShareDialog = true },
-                                    backgroundColor = com.example.ui.theme.PostItMint,
+                                    backgroundColor = PostItMint,
                                     fontSize = 18.sp
                                 )
                             }
@@ -379,6 +384,7 @@ fun PantryScreen(
                             items(filtered, key = { it.id }) { item ->
                                 PantryItemCard(
                                     item = item,
+                                    currency = currency,
                                     onAdjustStock = { delta ->
                                         viewModel.adjustPantryStock(item, delta)
                                     },
@@ -411,6 +417,10 @@ fun PantryScreen(
             onImportConfirmed = { imported, mergeMode ->
                 viewModel.importInventory(imported, mergeMode)
             },
+            onExportFullBackup = { cb -> viewModel.exportFullBackupJson(cb) },
+            onImportFullBackup = { rawJson, replaceExisting ->
+                viewModel.importFullBackupJson(rawJson, replaceExisting)
+            },
             onDismiss = { showShareDialog = false }
         )
     }
@@ -420,7 +430,7 @@ fun PantryScreen(
 private fun MetricPill(
     label: String,
     value: String,
-    color: androidx.compose.ui.graphics.Color
+    color: Color
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(

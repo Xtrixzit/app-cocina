@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FormatListNumbered
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Subject
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,17 +37,17 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -61,23 +61,31 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.model.Recipe
 import com.example.data.model.RecipeIngredient
+import com.example.settings.AppSettingsPreferences
+import com.example.ui.components.PostItButton
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItPeach
 import com.example.ui.theme.PostItSky
-import com.example.ui.theme.PostItTape
 import com.example.ui.theme.PostItYellow
 import com.example.util.ImageUtils
+import com.example.util.LocalizedLabels
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +95,7 @@ fun RecipeFormDialog(
     onSave: (Recipe) -> Unit
 ) {
     val context = LocalContext.current
+    val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
     val isEdit = initialRecipe != null
 
     var title by remember { mutableStateOf(initialRecipe?.title ?: "") }
@@ -98,7 +107,6 @@ fun RecipeFormDialog(
     var notes by remember { mutableStateOf(initialRecipe?.notes ?: "") }
     var imageUrl by remember { mutableStateOf(initialRecipe?.imageUrl ?: "") }
 
-    // Preparation editing mode: 0 = Por Pasos estructurados, 1 = Texto Libre / Multilínea
     var instructionsMode by remember { mutableIntStateOf(0) }
     var freeTextInstructions by remember {
         mutableStateOf(initialRecipe?.instructions?.joinToString("\n\n") ?: "")
@@ -124,7 +132,6 @@ fun RecipeFormDialog(
         }
     }
 
-    // Android Photo Picker Launcher
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -148,8 +155,8 @@ fun RecipeFormDialog(
                 TopAppBar(
                     title = {
                         Text(
-                            if (isEdit) "Editar Receta" else "Nueva Receta",
-                            fontFamily = com.example.ui.theme.CaveatFontFamily,
+                            if (isEdit) stringResource(R.string.recipe_form_edit_title) else stringResource(R.string.recipe_form_new_title),
+                            fontFamily = CaveatFontFamily,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.secondary
@@ -157,16 +164,15 @@ fun RecipeFormDialog(
                     },
                     navigationIcon = {
                         IconButton(onClick = onDismiss, modifier = Modifier.testTag("recipe_form_close")) {
-                            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = MaterialTheme.colorScheme.onSurface)
                         }
                     },
                     actions = {
-                        com.example.ui.components.PostItButton(
-                            text = "Guardar",
+                        PostItButton(
+                            text = stringResource(R.string.action_save),
                             onClick = {
                                 if (title.isNotBlank()) {
                                     val cleanedIngredients = ingredients.filter { it.name.isNotBlank() && it.amount > 0 }
-                                    
                                     val finalInstructions = if (instructionsMode == 1) {
                                         freeTextInstructions.split("\n")
                                             .map { it.trim() }
@@ -199,7 +205,7 @@ fun RecipeFormDialog(
                                 .testTag("recipe_form_save")
                         )
                     },
-                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 )
@@ -214,7 +220,6 @@ fun RecipeFormDialog(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // --- SECTION: FOTO DEL PRODUCTO FINAL ---
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -229,8 +234,8 @@ fun RecipeFormDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Foto del Producto Final",
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = stringResource(R.string.recipe_form_photo_title),
+                                fontFamily = CaveatFontFamily,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.secondary
@@ -238,8 +243,8 @@ fun RecipeFormDialog(
 
                             if (imageUrl.isNotBlank()) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    com.example.ui.components.PostItButton(
-                                        text = "Cambiar",
+                                    PostItButton(
+                                        text = stringResource(R.string.action_change),
                                         icon = Icons.Default.AddPhotoAlternate,
                                         onClick = {
                                             photoPickerLauncher.launch(
@@ -255,7 +260,7 @@ fun RecipeFormDialog(
                                     ) {
                                         Icon(
                                             Icons.Default.Delete,
-                                            contentDescription = "Quitar foto",
+                                            contentDescription = stringResource(R.string.recipe_form_photo_remove_cd),
                                             tint = MaterialTheme.colorScheme.error,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -267,7 +272,6 @@ fun RecipeFormDialog(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         if (imageUrl.isNotBlank()) {
-                            // Polaroid / Photo frame preview
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -277,8 +281,8 @@ fun RecipeFormDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 AsyncImage(
-                                    model = imageUrl,
-                                    contentDescription = "Foto de la receta",
+                                    model = ImageUtils.toImageModel(imageUrl),
+                                    contentDescription = stringResource(R.string.recipe_detail_photo_cd, title),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -287,7 +291,6 @@ fun RecipeFormDialog(
                                 )
                             }
                         } else {
-                            // Clickable placeholder to add image
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -318,15 +321,15 @@ fun RecipeFormDialog(
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "+ Toca para agregar foto del producto terminado",
-                                        fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                        text = stringResource(R.string.recipe_form_photo_add),
+                                        fontFamily = PatrickHandFontFamily,
                                         fontSize = 17.sp,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Elige una foto de tu galería o cámara",
-                                        fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                        text = stringResource(R.string.recipe_form_photo_sub),
+                                        fontFamily = PatrickHandFontFamily,
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -336,19 +339,17 @@ fun RecipeFormDialog(
                     }
                 }
 
-                // Title
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Nombre de la receta *") },
-                    placeholder = { Text("Ej. Paella de Mariscos") },
+                    label = { Text(stringResource(R.string.recipe_form_title_label)) },
+                    placeholder = { Text(stringResource(R.string.recipe_form_title_hint)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("recipe_form_title"),
                     singleLine = true
                 )
 
-                // Category & Difficulty Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -360,13 +361,13 @@ fun RecipeFormDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = category,
+                            value = LocalizedLabels.recipeCategory(context, category),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Categoría") },
+                            label = { Text(stringResource(R.string.recipe_form_cat_label)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .fillMaxWidth()
                         )
                         ExposedDropdownMenu(
@@ -375,7 +376,7 @@ fun RecipeFormDialog(
                         ) {
                             categories.forEach { cat ->
                                 DropdownMenuItem(
-                                    text = { Text(cat) },
+                                    text = { Text(LocalizedLabels.recipeCategory(context, cat)) },
                                     onClick = {
                                         category = cat
                                         catExpanded = false
@@ -392,13 +393,13 @@ fun RecipeFormDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = difficulty,
+                            value = LocalizedLabels.difficulty(context, difficulty),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Dificultad") },
+                            label = { Text(stringResource(R.string.recipe_form_diff_label)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = diffExpanded) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .fillMaxWidth()
                         )
                         ExposedDropdownMenu(
@@ -407,7 +408,7 @@ fun RecipeFormDialog(
                         ) {
                             difficulties.forEach { diff ->
                                 DropdownMenuItem(
-                                    text = { Text(diff) },
+                                    text = { Text(LocalizedLabels.difficulty(context, diff)) },
                                     onClick = {
                                         difficulty = diff
                                         diffExpanded = false
@@ -418,7 +419,6 @@ fun RecipeFormDialog(
                     }
                 }
 
-                // Servings, Prep Time, Cook Time
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -426,7 +426,7 @@ fun RecipeFormDialog(
                     OutlinedTextField(
                         value = servings.toString(),
                         onValueChange = { servings = it.toIntOrNull() ?: 1 },
-                        label = { Text("Porciones base") },
+                        label = { Text(stringResource(R.string.recipe_form_servings_label)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .weight(1f)
@@ -436,7 +436,7 @@ fun RecipeFormDialog(
                     OutlinedTextField(
                         value = prepTime.toString(),
                         onValueChange = { prepTime = it.toIntOrNull() ?: 0 },
-                        label = { Text("Prep. (min)") },
+                        label = { Text(stringResource(R.string.recipe_form_prep_label)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .weight(1f)
@@ -446,7 +446,7 @@ fun RecipeFormDialog(
                     OutlinedTextField(
                         value = cookTime.toString(),
                         onValueChange = { cookTime = it.toIntOrNull() ?: 0 },
-                        label = { Text("Cocción (min)") },
+                        label = { Text(stringResource(R.string.recipe_form_cook_label)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .weight(1f)
@@ -457,20 +457,19 @@ fun RecipeFormDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // --- INGREDIENTS SECTION ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Ingredientes base (para $servings porciones)",
-                        fontFamily = com.example.ui.theme.CaveatFontFamily,
+                        text = stringResource(R.string.recipe_form_ingredients_header, servings),
+                        fontFamily = CaveatFontFamily,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    com.example.ui.components.PostItButton(
-                        text = "+ Ingrediente",
+                    PostItButton(
+                        text = stringResource(R.string.recipe_form_add_ingredient),
                         icon = Icons.Default.Add,
                         onClick = {
                             ingredients.add(RecipeIngredient(name = "", amount = 100.0, unit = "g", category = "Despensa"))
@@ -478,7 +477,7 @@ fun RecipeFormDialog(
                         backgroundColor = PostItPeach,
                         fontSize = 17.sp,
                         rotationDegrees = -1f,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier.testTag("recipe_form_add_ingredient")
                     )
                 }
@@ -496,8 +495,8 @@ fun RecipeFormDialog(
                                 OutlinedTextField(
                                     value = ingredient.name,
                                     onValueChange = { ingredients[index] = ingredient.copy(name = it) },
-                                    label = { Text("Ingrediente #${index + 1}") },
-                                    placeholder = { Text("Ej. Harina de trigo") },
+                                    label = { Text(stringResource(R.string.recipe_form_ingredient_num, index + 1)) },
+                                    placeholder = { Text(stringResource(R.string.recipe_form_ingredient_hint)) },
                                     modifier = Modifier.weight(1f),
                                     singleLine = true
                                 )
@@ -508,7 +507,7 @@ fun RecipeFormDialog(
                                     ) {
                                         Icon(
                                             Icons.Default.Delete,
-                                            contentDescription = "Quitar ingrediente",
+                                            contentDescription = stringResource(R.string.recipe_form_remove_ing_cd),
                                             tint = MaterialTheme.colorScheme.error
                                         )
                                     }
@@ -527,7 +526,7 @@ fun RecipeFormDialog(
                                         val amt = it.toDoubleOrNull() ?: 0.0
                                         ingredients[index] = ingredient.copy(amount = amt)
                                     },
-                                    label = { Text("Cantidad") },
+                                    label = { Text(stringResource(R.string.recipe_form_qty_label)) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier.weight(1f),
                                     singleLine = true
@@ -540,12 +539,12 @@ fun RecipeFormDialog(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     OutlinedTextField(
-                                        value = ingredient.unit,
+                                        value = LocalizedLabels.unit(context, ingredient.unit),
                                         onValueChange = {},
                                         readOnly = true,
-                                        label = { Text("Unidad") },
+                                        label = { Text(stringResource(R.string.recipe_form_unit_label)) },
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
-                                        modifier = Modifier.menuAnchor()
+                                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                     )
                                     ExposedDropdownMenu(
                                         expanded = unitExpanded,
@@ -553,7 +552,7 @@ fun RecipeFormDialog(
                                     ) {
                                         units.forEach { u ->
                                             DropdownMenuItem(
-                                                text = { Text(u) },
+                                                text = { Text(LocalizedLabels.unit(context, u)) },
                                                 onClick = {
                                                     ingredients[index] = ingredient.copy(unit = u)
                                                     unitExpanded = false
@@ -568,14 +567,26 @@ fun RecipeFormDialog(
 
                             OutlinedTextField(
                                 value = if (ingredient.manualUnitCost > 0.0) {
-                                    if (ingredient.manualUnitCost < 0.01) "%.4f".format(ingredient.manualUnitCost) else ingredient.manualUnitCost.toString()
+                                    if (ingredient.manualUnitCost < 0.01) {
+                                        String.format(Locale.US, "%.4f", ingredient.manualUnitCost)
+                                    } else {
+                                        ingredient.manualUnitCost.toString()
+                                    }
                                 } else "",
                                 onValueChange = {
                                     val cost = it.toDoubleOrNull() ?: 0.0
                                     ingredients[index] = ingredient.copy(manualUnitCost = cost)
                                 },
-                                label = { Text("Costo unitario manual ($/${ingredient.unit}) - Opcional") },
-                                placeholder = { Text("Si está en 0, usa el costo de tu despensa") },
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            R.string.recipe_form_manual_cost_label,
+                                            currency.symbol,
+                                            LocalizedLabels.unit(context, ingredient.unit)
+                                        )
+                                    )
+                                },
+                                placeholder = { Text(stringResource(R.string.recipe_form_manual_cost_hint)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
@@ -586,7 +597,6 @@ fun RecipeFormDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // --- SECTION: EDICIÓN DE PREPARACIÓN ---
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -600,20 +610,19 @@ fun RecipeFormDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Instrucciones de Preparación",
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = stringResource(R.string.recipe_form_instructions_title),
+                                fontFamily = CaveatFontFamily,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.secondary
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.weight(1f)
                             )
 
-                            // Toggle between Step Mode and Free Text Mode
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 FilterChip(
                                     selected = instructionsMode == 0,
                                     onClick = {
                                         if (instructionsMode == 1) {
-                                            // Sync free text back to structured steps
                                             val lines = freeTextInstructions.split("\n")
                                                 .map { it.trim() }
                                                 .filter { it.isNotBlank() }
@@ -626,19 +635,18 @@ fun RecipeFormDialog(
                                         }
                                         instructionsMode = 0
                                     },
-                                    label = { Text("Por Pasos") },
+                                    label = { Text(stringResource(R.string.recipe_form_mode_steps)) },
                                     leadingIcon = { Icon(Icons.Default.FormatListNumbered, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 )
                                 FilterChip(
                                     selected = instructionsMode == 1,
                                     onClick = {
                                         if (instructionsMode == 0) {
-                                            // Sync structured steps to free text
                                             freeTextInstructions = instructions.filter { it.isNotBlank() }.joinToString("\n\n")
                                         }
                                         instructionsMode = 1
                                     },
-                                    label = { Text("Texto Libre") },
+                                    label = { Text(stringResource(R.string.recipe_form_mode_free)) },
                                     leadingIcon = { Icon(Icons.Default.Subject, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 )
                             }
@@ -647,7 +655,6 @@ fun RecipeFormDialog(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         if (instructionsMode == 0) {
-                            // Step by step editor with reorder & delete
                             instructions.forEachIndexed { index, step ->
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
@@ -681,7 +688,7 @@ fun RecipeFormDialog(
                                         OutlinedTextField(
                                             value = step,
                                             onValueChange = { instructions[index] = it },
-                                            placeholder = { Text("Describe el paso ${index + 1}...") },
+                                            placeholder = { Text(stringResource(R.string.recipe_form_step_hint, index + 1)) },
                                             modifier = Modifier.weight(1f),
                                             minLines = 2,
                                             maxLines = 5
@@ -700,7 +707,7 @@ fun RecipeFormDialog(
                                                     },
                                                     modifier = Modifier.size(28.dp)
                                                 ) {
-                                                    Icon(Icons.Default.ArrowUpward, contentDescription = "Subir paso", modifier = Modifier.size(16.dp))
+                                                    Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.recipe_form_step_up_cd), modifier = Modifier.size(16.dp))
                                                 }
                                             }
                                             if (index < instructions.size - 1) {
@@ -712,7 +719,7 @@ fun RecipeFormDialog(
                                                     },
                                                     modifier = Modifier.size(28.dp)
                                                 ) {
-                                                    Icon(Icons.Default.ArrowDownward, contentDescription = "Bajar paso", modifier = Modifier.size(16.dp))
+                                                    Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.recipe_form_step_down_cd), modifier = Modifier.size(16.dp))
                                                 }
                                             }
                                             if (instructions.size > 1) {
@@ -720,7 +727,7 @@ fun RecipeFormDialog(
                                                     onClick = { instructions.removeAt(index) },
                                                     modifier = Modifier.size(28.dp)
                                                 ) {
-                                                    Icon(Icons.Default.Delete, contentDescription = "Borrar paso", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.recipe_form_step_del_cd), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                                 }
                                             }
                                         }
@@ -730,8 +737,8 @@ fun RecipeFormDialog(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            com.example.ui.components.PostItButton(
-                                text = "+ Añadir Siguiente Paso",
+                            PostItButton(
+                                text = stringResource(R.string.recipe_form_add_step),
                                 icon = Icons.Default.Add,
                                 onClick = { instructions.add("") },
                                 backgroundColor = PostItYellow,
@@ -739,12 +746,11 @@ fun RecipeFormDialog(
                                 modifier = Modifier.testTag("recipe_form_add_step")
                             )
                         } else {
-                            // Free multiline text editor for easy preparation typing / pasting
                             OutlinedTextField(
                                 value = freeTextInstructions,
                                 onValueChange = { freeTextInstructions = it },
-                                label = { Text("Escribe o edita la preparación completa") },
-                                placeholder = { Text("Separa cada paso con un salto de línea (Enter). Ejemplo:\n\n1. Picar las cebollas y ajo.\n\n2. Sofreír en aceite de oliva durante 10 minutos.\n\n3. Añadir el arroz y caldo...") },
+                                label = { Text(stringResource(R.string.recipe_form_free_label)) },
+                                placeholder = { Text(stringResource(R.string.recipe_form_free_hint)) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("recipe_form_free_text_instructions"),
@@ -753,8 +759,8 @@ fun RecipeFormDialog(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "💡 Consejo: Puedes escribir o pegar todo el procedimiento aquí; cada párrafo se tomará como un paso de preparación.",
-                                fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                text = stringResource(R.string.recipe_form_free_tip),
+                                fontFamily = PatrickHandFontFamily,
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -764,12 +770,11 @@ fun RecipeFormDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Notes
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Consejos y notas del chef (opcional)") },
-                    placeholder = { Text("Trucos para que quede perfecto, alternativas de ingredientes...") },
+                    label = { Text(stringResource(R.string.recipe_form_notes_label)) },
+                    placeholder = { Text(stringResource(R.string.recipe_form_notes_hint)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     maxLines = 4

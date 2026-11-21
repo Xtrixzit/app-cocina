@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import android.app.Activity
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -20,18 +20,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Kitchen
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.RestaurantMenu
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,24 +50,38 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.auth.AuthManager
+import com.example.settings.AppLanguage
+import com.example.settings.AppSettingsPreferences
+import com.example.ui.components.PrivacyPolicyDialog
+import com.example.ui.components.notebookPaperBackground
+import com.example.ui.components.sketchedBorder
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
+import com.example.util.LocaleHelper
 
 @Composable
 fun AuthScreen(
-    onAuthSuccess: () -> Unit
+    onAuthSuccess: () -> Unit,
+    onContinueAsGuest: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val coroutineScope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showLanguageMenu by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    val currentLanguage by AppSettingsPreferences.observeLanguage(context).collectAsStateWithLifecycle()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -70,83 +90,128 @@ fun AuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .notebookPaperBackground()
+                .safeDrawingPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Box {
+                    OutlinedButton(
+                        onClick = { showLanguageMenu = true },
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.testTag("auth_language_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = stringResource(R.string.settings_language),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (currentLanguage == AppLanguage.SYSTEM) {
+                                stringResource(R.string.lang_system)
+                            } else {
+                                currentLanguage.nativeName
+                            },
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showLanguageMenu,
+                        onDismissRequest = { showLanguageMenu = false }
+                    ) {
+                        AppLanguage.entries.forEach { lang ->
+                            DropdownMenuItem(
+                                text = { Text(LocaleHelper.languageDisplayName(context, lang)) },
+                                onClick = {
+                                    showLanguageMenu = false
+                                    LocaleHelper.applyLanguage(activity, lang.code)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
-            // App Icon Circle
+            Spacer(modifier = Modifier.height(8.dp))
+
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(92.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Kitchen,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.auth_title),
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(50.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Recetario & Despensa",
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                text = stringResource(R.string.auth_title),
+                fontFamily = CaveatFontFamily,
+                fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.secondary,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Tus recetas favoritas, cálculo dinámico de porciones y control inteligente de provisiones.",
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.auth_subtitle),
+                fontFamily = PatrickHandFontFamily,
+                fontSize = 17.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Feature Highlights
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 FeatureRow(
+                    icon = Icons.Default.CloudDone,
+                    title = stringResource(R.string.auth_feat_cloud_title),
+                    desc = stringResource(R.string.auth_feat_cloud_desc)
+                )
+                FeatureRow(
+                    icon = Icons.Default.RecordVoiceOver,
+                    title = stringResource(R.string.auth_feat_voice_title),
+                    desc = stringResource(R.string.auth_feat_voice_desc)
+                )
+                FeatureRow(
                     icon = Icons.Default.RestaurantMenu,
-                    title = "Recetario Personal",
-                    desc = "Guarda ingredientes, tiempos de preparación y pasos detallados."
+                    title = stringResource(R.string.auth_feat_timer_title),
+                    desc = stringResource(R.string.auth_feat_timer_desc)
                 )
                 FeatureRow(
                     icon = Icons.Default.Calculate,
-                    title = "Cálculo Dinámico de Porciones",
-                    desc = "Ajusta las cantidades para 2, 4 o más personas al instante."
-                )
-                FeatureRow(
-                    icon = Icons.Default.Inventory2,
-                    title = "Inventario de Despensa",
-                    desc = "Conoce qué provisiones tienes y recibe alertas de stock bajo."
-                )
-                FeatureRow(
-                    icon = Icons.Default.ShoppingCart,
-                    title = "Lista de Compras Inteligente",
-                    desc = "Calcula automáticamente qué ingredientes te faltan para cocinar."
+                    title = stringResource(R.string.auth_feat_prod_title),
+                    desc = stringResource(R.string.auth_feat_prod_desc)
                 )
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             if (errorMessage != null) {
                 Text(
@@ -160,11 +225,11 @@ fun AuthScreen(
 
             Button(
                 onClick = {
-                    val activity = context as? Activity ?: return@Button
+                    val act = context as? Activity ?: return@Button
                     isLoading = true
                     errorMessage = null
                     AuthManager.onGoogleSignInClicked(
-                        activity = activity,
+                        activity = act,
                         credentialManager = credentialManager,
                         onAuthSuccess = {
                             isLoading = false
@@ -182,7 +247,7 @@ fun AuthScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(54.dp)
                     .testTag("google_signin_button"),
                 enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(
@@ -198,21 +263,67 @@ fun AuthScreen(
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.RestaurantMenu,
+                        imageVector = Icons.Default.Inventory2,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Iniciar sesión con Google",
+                        text = stringResource(R.string.auth_google_btn),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onContinueAsGuest,
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .testTag("guest_signin_button"),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PersonOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.auth_guest_btn),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.auth_guest_note),
+                fontFamily = PatrickHandFontFamily,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextButton(onClick = { showPrivacyDialog = true }) {
+                Text(
+                    text = stringResource(R.string.privacy_title),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
         }
+    }
+
+    if (showPrivacyDialog) {
+        PrivacyPolicyDialog(onDismiss = { showPrivacyDialog = false })
     }
 }
 

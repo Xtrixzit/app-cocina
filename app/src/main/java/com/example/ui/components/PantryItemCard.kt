@@ -40,14 +40,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.PantryItem
+import com.example.settings.AppSettingsPreferences
+import com.example.settings.CurrencyOption
+import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
+import com.example.util.LocalizedLabels
+import java.util.Locale
 
 @Composable
 fun PantryItemCard(
@@ -55,8 +63,11 @@ fun PantryItemCard(
     onAdjustStock: (Double) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currency: CurrencyOption = CurrencyOption.USD
 ) {
+    val context = LocalContext.current
+
     val targetStatusColor = when {
         item.isOutOfStock -> StockRed
         item.isLowStock -> StockYellow
@@ -70,10 +81,12 @@ fun PantryItemCard(
     )
 
     val statusText = when {
-        item.isOutOfStock -> "Agotado"
-        item.isLowStock -> "Stock Bajo"
-        else -> "En Stock"
+        item.isOutOfStock -> stringResource(R.string.pantry_status_out)
+        item.isLowStock -> stringResource(R.string.pantry_status_low)
+        else -> stringResource(R.string.pantry_status_ok)
     }
+
+    val displayUnit = LocalizedLabels.unit(context, item.unit)
 
     Card(
         modifier = modifier
@@ -90,7 +103,6 @@ fun PantryItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Status pill + category
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
@@ -120,7 +132,7 @@ fun PantryItemCard(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
-                        text = item.category,
+                        text = LocalizedLabels.pantryCategory(context, item.category),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -135,7 +147,7 @@ fun PantryItemCard(
                     ) {
                         Icon(
                             Icons.Default.Edit,
-                            contentDescription = "Editar",
+                            contentDescription = stringResource(R.string.action_edit),
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -148,7 +160,7 @@ fun PantryItemCard(
                     ) {
                         Icon(
                             Icons.Default.DeleteOutline,
-                            contentDescription = "Eliminar",
+                            contentDescription = stringResource(R.string.action_delete),
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
                         )
@@ -160,36 +172,35 @@ fun PantryItemCard(
 
             Text(
                 text = item.name,
-                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                fontFamily = CaveatFontFamily,
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.secondary
             )
 
-            // Price / Valuation tag
             if (item.unitCost > 0.0) {
-                val formattedUnitCost = if (item.unitCost < 0.01) "%.4f".format(item.unitCost) else "%.2f".format(item.unitCost)
-                val totalStockVal = item.quantity * item.unitCost
+                val formattedUnitCost = AppSettingsPreferences.formatMoney(item.unitCost, currency, forceFourDecimalsIfTiny = true)
+                val totalStockVal = AppSettingsPreferences.formatMoney(item.quantity * item.unitCost, currency)
                 Row(
                     modifier = Modifier.padding(top = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🏷 $$formattedUnitCost / ${item.unit}",
+                        text = "🏷 $formattedUnitCost / $displayUnit",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "• Valor en stock: $${"%.2f".format(totalStockVal)}",
+                        text = stringResource(R.string.pantry_card_value, totalStockVal),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
                 Text(
-                    text = "🏷 Sin costo registrado (toca editar para agregar)",
+                    text = stringResource(R.string.pantry_card_no_cost),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     fontSize = 11.sp
@@ -207,21 +218,20 @@ fun PantryItemCard(
                     val formattedQty = if (item.quantity % 1.0 == 0.0) {
                         item.quantity.toInt().toString()
                     } else {
-                        "%.1f".format(item.quantity)
+                        String.format(Locale.US, "%.1f", item.quantity)
                     }
 
-                    // Animated Quantity Counter
                     AnimatedContent(
-                        targetState = "$formattedQty ${item.unit}",
+                        targetState = "$formattedQty $displayUnit",
                         transitionSpec = {
                             slideInVertically { height -> height } + fadeIn() togetherWith
-                                    slideOutVertically { height -> -height } + fadeOut()
+                                slideOutVertically { height -> -height } + fadeOut()
                         },
                         label = "pantryQtyAnimation"
                     ) { text ->
                         Text(
                             text = text,
-                            fontFamily = com.example.ui.theme.CaveatFontFamily,
+                            fontFamily = CaveatFontFamily,
                             fontSize = 26.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (item.isOutOfStock) StockRed else MaterialTheme.colorScheme.primary
@@ -229,8 +239,13 @@ fun PantryItemCard(
                     }
 
                     if (item.minQuantity > 0.0) {
+                        val minStr = if (item.minQuantity % 1.0 == 0.0) {
+                            item.minQuantity.toInt().toString()
+                        } else {
+                            String.format(Locale.US, "%.1f", item.minQuantity)
+                        }
                         Text(
-                            text = "Mínimo alerta: ${item.minQuantity} ${item.unit}",
+                            text = stringResource(R.string.pantry_card_min_alert, minStr, displayUnit),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
@@ -238,7 +253,6 @@ fun PantryItemCard(
                     }
                 }
 
-                // Quick Increment/Decrement Buttons with Stamp Click
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val step = when (item.unit.lowercase()) {
                         "g", "ml" -> 50.0
@@ -257,7 +271,7 @@ fun PantryItemCard(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
-                        Icon(Icons.Default.Remove, contentDescription = "Menos", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.action_less), modifier = Modifier.size(18.dp))
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -272,7 +286,7 @@ fun PantryItemCard(
                             containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Más", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_more), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
             }

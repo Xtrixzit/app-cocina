@@ -19,10 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,19 +31,34 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.Recipe
+import com.example.settings.AppSettingsPreferences
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
+import com.example.ui.components.PostItButton
+import com.example.ui.components.PostItFilterChip
 import com.example.ui.components.RecipeCard
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
-import com.example.ui.components.stampClickable
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
+import com.example.ui.theme.PostItMint
+import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItPink
+import com.example.ui.theme.PostItSky
+import com.example.ui.theme.PostItYellow
+import com.example.util.LocalizedLabels
+import com.example.util.UnitConverter
 
 @Composable
 fun RecipesScreen(
@@ -59,20 +71,22 @@ fun RecipesScreen(
     onNavigateToSurpriseMe: () -> Unit = {},
     onShowHelp: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val recipesUiState by viewModel.recipesState.collectAsState()
     val searchQuery by viewModel.recipeSearchQuery.collectAsState()
     val selectedCategory by viewModel.selectedRecipeCategory.collectAsState()
+    val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
 
-    val categories = listOf("Todas", "Desayunos", "Almuerzos", "Cenas", "Postres", "Snacks", "Sopas")
+    val categories = listOf("Todas", "Desayunos", "Almuerzos", "Cenas", "Postres", "Snacks", "Bebidas", "Sopas")
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            com.example.ui.components.PostItButton(
-                text = "+ Nueva Receta",
+            PostItButton(
+                text = stringResource(R.string.recipes_fab_add),
                 icon = Icons.Default.Add,
                 onClick = onAddNewRecipe,
-                backgroundColor = com.example.ui.theme.PostItPeach,
+                backgroundColor = PostItPeach,
                 rotationDegrees = -2f,
                 modifier = Modifier.testTag("add_recipe_fab")
             )
@@ -84,7 +98,6 @@ fun RecipesScreen(
                 .padding(padding)
                 .notebookPaperBackground()
         ) {
-            // Reference Style Header: "Simply Cooking Recipes"
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -95,13 +108,13 @@ fun RecipesScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Simply",
+                        text = stringResource(R.string.recipes_hero_word1),
                         style = MaterialTheme.typography.displayMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Cooking",
+                        text = stringResource(R.string.recipes_hero_word2),
                         style = MaterialTheme.typography.displayMedium,
                         color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.Bold
@@ -115,25 +128,24 @@ fun RecipesScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "Recipes",
-                        fontFamily = com.example.ui.theme.CaveatFontFamily,
+                        text = stringResource(R.string.recipes_hero_box),
+                        fontFamily = CaveatFontFamily,
                         fontSize = 32.sp,
                         color = MaterialTheme.colorScheme.secondary,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
 
-                // Reference style Post-It Quick Action Buttons: [Producción] [Check list] [Surprise me] [Ayuda]
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    com.example.ui.components.PostItButton(
-                        text = "Producción",
+                    PostItButton(
+                        text = stringResource(R.string.recipes_quick_production),
                         onClick = onNavigateToProduction,
-                        backgroundColor = com.example.ui.theme.PostItYellow,
+                        backgroundColor = PostItYellow,
                         rotationDegrees = -1.2f,
                         fontSize = 18.sp,
                         modifier = Modifier
@@ -141,10 +153,10 @@ fun RecipesScreen(
                             .testTag("postit_quick_production")
                     )
 
-                    com.example.ui.components.PostItButton(
-                        text = "Check list",
+                    PostItButton(
+                        text = stringResource(R.string.recipes_quick_checklist),
                         onClick = onNavigateToCheckList,
-                        backgroundColor = com.example.ui.theme.PostItSky,
+                        backgroundColor = PostItSky,
                         rotationDegrees = 1.0f,
                         fontSize = 18.sp,
                         modifier = Modifier
@@ -152,10 +164,10 @@ fun RecipesScreen(
                             .testTag("postit_quick_checklist")
                     )
 
-                    com.example.ui.components.PostItButton(
-                        text = "Surprise",
+                    PostItButton(
+                        text = stringResource(R.string.recipes_quick_cook),
                         onClick = onNavigateToSurpriseMe,
-                        backgroundColor = com.example.ui.theme.PostItMint,
+                        backgroundColor = PostItMint,
                         rotationDegrees = -0.8f,
                         fontSize = 18.sp,
                         modifier = Modifier
@@ -163,10 +175,10 @@ fun RecipesScreen(
                             .testTag("postit_quick_surpriseme")
                     )
 
-                    com.example.ui.components.PostItButton(
-                        text = "Ayuda",
+                    PostItButton(
+                        text = stringResource(R.string.recipes_quick_help),
                         onClick = onShowHelp,
-                        backgroundColor = com.example.ui.theme.PostItPeach,
+                        backgroundColor = PostItPeach,
                         rotationDegrees = 1.2f,
                         fontSize = 18.sp,
                         modifier = Modifier.testTag("postit_quick_help")
@@ -180,8 +192,8 @@ fun RecipesScreen(
                 onValueChange = { viewModel.recipeSearchQuery.value = it },
                 placeholder = {
                     Text(
-                        "Buscar recetas, ingredientes...",
-                        fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                        stringResource(R.string.recipes_search_hint),
+                        fontFamily = PatrickHandFontFamily,
                         fontSize = 17.sp
                     )
                 },
@@ -189,7 +201,7 @@ fun RecipesScreen(
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { viewModel.recipeSearchQuery.value = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Limpiar", tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear), tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 },
@@ -201,7 +213,7 @@ fun RecipesScreen(
                 singleLine = true
             )
 
-            // Category Filter Post-It Chips
+            // Category Filter Post-It Chips (canonical values stored, localized display label)
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -209,24 +221,23 @@ fun RecipesScreen(
             ) {
                 items(categories) { cat ->
                     val color = when (cat) {
-                        "Todas" -> com.example.ui.theme.PostItYellow
-                        "Desayunos" -> com.example.ui.theme.PostItPeach
-                        "Almuerzos" -> com.example.ui.theme.PostItMint
-                        "Cenas" -> com.example.ui.theme.PostItSky
-                        "Postres" -> com.example.ui.theme.PostItPink
-                        else -> com.example.ui.theme.PostItYellow
+                        "Todas" -> PostItYellow
+                        "Desayunos" -> PostItPeach
+                        "Almuerzos" -> PostItMint
+                        "Cenas" -> PostItSky
+                        "Postres" -> PostItPink
+                        else -> PostItYellow
                     }
-                    com.example.ui.components.PostItFilterChip(
+                    PostItFilterChip(
                         selected = selectedCategory == cat,
                         onClick = { viewModel.selectedRecipeCategory.value = cat },
-                        text = cat,
+                        text = LocalizedLabels.recipeCategory(context, cat),
                         selectedColor = color,
                         modifier = Modifier.testTag("recipe_chip_$cat")
                     )
                 }
             }
 
-            // Recipe List / States
             when (val state = recipesUiState) {
                 is UiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -249,8 +260,8 @@ fun RecipesScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Actualización de base de datos requerida",
-                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    text = stringResource(R.string.recipes_sync_error),
+                                    fontFamily = CaveatFontFamily,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error,
@@ -258,17 +269,17 @@ fun RecipesScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Se detectó una versión anterior de la base de datos local. Pulsa el botón para actualizarla y cargar tus recetas limpiamente.",
-                                    fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                    text = state.message,
+                                    fontFamily = PatrickHandFontFamily,
                                     fontSize = 17.sp,
                                     textAlign = TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
-                                com.example.ui.components.PostItButton(
-                                    text = "Restablecer y Actualizar Base de Datos",
-                                    onClick = { viewModel.resetDatabase() },
-                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                PostItButton(
+                                    text = stringResource(R.string.action_retry_sync),
+                                    onClick = { viewModel.retryCloudSync() },
+                                    backgroundColor = PostItYellow,
                                     fontSize = 20.sp,
                                     modifier = Modifier.testTag("reset_database_button")
                                 )
@@ -280,8 +291,8 @@ fun RecipesScreen(
                     val filtered = state.data.filter { recipe ->
                         val matchesCat = selectedCategory == "Todas" || recipe.category.equals(selectedCategory, ignoreCase = true)
                         val matchesSearch = searchQuery.isBlank() ||
-                                recipe.title.contains(searchQuery, ignoreCase = true) ||
-                                recipe.ingredients.any { it.name.contains(searchQuery, ignoreCase = true) }
+                            recipe.title.contains(searchQuery, ignoreCase = true) ||
+                            recipe.ingredients.any { it.name.contains(searchQuery, ignoreCase = true) }
                         matchesCat && matchesSearch
                     }
 
@@ -301,14 +312,22 @@ fun RecipesScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = if (searchQuery.isNotBlank()) "No se encontraron recetas" else "Aún no tienes recetas guardadas",
+                                text = if (searchQuery.isNotBlank()) {
+                                    stringResource(R.string.recipes_empty_search)
+                                } else {
+                                    stringResource(R.string.recipes_empty_none)
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = if (searchQuery.isNotBlank()) "Prueba con otro término de búsqueda" else "Comienza agregando tu primera receta o carga las recetas de ejemplo para probar.",
+                                text = if (searchQuery.isNotBlank()) {
+                                    stringResource(R.string.recipes_empty_search_tip)
+                                } else {
+                                    stringResource(R.string.recipes_empty_none_tip)
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -316,10 +335,10 @@ fun RecipesScreen(
 
                             if (state.data.isEmpty()) {
                                 Spacer(modifier = Modifier.height(20.dp))
-                                com.example.ui.components.PostItButton(
-                                    text = "Cargar recetas de ejemplo",
+                                PostItButton(
+                                    text = stringResource(R.string.recipes_seed_samples),
                                     onClick = { viewModel.seedSampleRecipes() },
-                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                    backgroundColor = PostItYellow,
                                     fontSize = 20.sp,
                                     modifier = Modifier.testTag("seed_sample_recipes_button")
                                 )
@@ -331,15 +350,17 @@ fun RecipesScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(filtered, key = { it.id }) { recipe ->
-                                // Calculate feasibility for card
                                 var available = 0
                                 var totalRecipeCost = 0.0
                                 recipe.ingredients.forEach { ing ->
-                                    val inPantry = pantryItems.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
-                                    val inPantryQty = inPantry?.quantity ?: 0.0
-                                    if (inPantryQty >= ing.amount && ing.amount > 0) available++
+                                    val inPantry = pantryItems.find {
+                                        it.name.trim().equals(ing.name.trim(), ignoreCase = true)
+                                    }
+                                    val inPantryQty = UnitConverter.availableInTargetUnit(inPantry, ing.unit)
+                                    if (inPantryQty + 0.0001 >= ing.amount && ing.amount > 0) available++
 
-                                    val unitCost = if (inPantry != null && inPantry.unitCost > 0.0) inPantry.unitCost else ing.manualUnitCost
+                                    val pantryUnitCost = UnitConverter.unitCostInTargetUnit(inPantry, ing.unit)
+                                    val unitCost = if (pantryUnitCost > 0.0) pantryUnitCost else ing.manualUnitCost
                                     totalRecipeCost += (ing.amount * unitCost)
                                 }
                                 val pct = if (recipe.ingredients.isEmpty()) 100 else ((available.toDouble() / recipe.ingredients.size) * 100).toInt()
@@ -348,6 +369,7 @@ fun RecipesScreen(
                                     recipe = recipe,
                                     feasibilityMatchPct = pct,
                                     estimatedCost = if (totalRecipeCost > 0.0) totalRecipeCost else null,
+                                    currency = currency,
                                     onClick = { onSelectRecipe(recipe) }
                                 )
                             }

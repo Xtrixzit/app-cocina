@@ -1,8 +1,7 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.background
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,15 +14,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.IosShare
-import androidx.compose.material.icons.filled.Merge
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -45,16 +40,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.PantryItem
+import com.example.data.sync.FullBackupManager
 import com.example.data.sync.InventorySyncManager
 import com.example.ui.theme.StockGreen
 
@@ -62,18 +58,23 @@ import com.example.ui.theme.StockGreen
 fun ShareInventoryDialog(
     pantryItems: List<PantryItem>,
     onImportConfirmed: (List<PantryItem>, Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onExportFullBackup: (((String) -> Unit) -> Unit)? = null,
+    onImportFullBackup: ((String, Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Compartir, 1: Recibir
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     var inputText by remember { mutableStateOf("") }
-    var mergeMode by remember { mutableStateOf(true) } // true: fusionar, false: reemplazar
+    var mergeMode by remember { mutableStateOf(true) }
     var copiedToClipboard by remember { mutableStateOf(false) }
 
     val parsedItems = remember(inputText) {
         if (inputText.isNotBlank()) InventorySyncManager.parseSyncToken(inputText) else null
+    }
+    val parsedBackup = remember(inputText) {
+        if (inputText.isNotBlank() && parsedItems == null) FullBackupManager.parseFromJson(inputText) else null
     }
 
     AlertDialog(
@@ -87,7 +88,7 @@ fun ShareInventoryDialog(
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 Text(
-                    text = "Sincronizar entre Dispositivos",
+                    text = stringResource(R.string.sync_dialog_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -96,23 +97,22 @@ fun ShareInventoryDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 TabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text("Compartir") }
+                        text = { Text(stringResource(R.string.sync_tab_share)) }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Recibir / Actualizar") }
+                        text = { Text(stringResource(R.string.sync_tab_import)) }
                     )
                 }
 
                 if (selectedTab == 0) {
-                    // --- TAB COMPARTIR ---
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
@@ -121,14 +121,14 @@ fun ShareInventoryDialog(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = "Envía tu inventario actual (${pantryItems.size} provisiones)",
+                                text = stringResource(R.string.sync_pantry_header, pantryItems.size),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "El otro dispositivo puede escanear o pegar este código para actualizar su despensa sin necesitar cuentas de Google.",
+                                text = stringResource(R.string.sync_pantry_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
@@ -146,7 +146,7 @@ fun ShareInventoryDialog(
                     ) {
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Compartir por WhatsApp / Mensajes")
+                        Text(stringResource(R.string.sync_share_pantry_btn))
                     }
 
                     OutlinedButton(
@@ -166,13 +166,38 @@ fun ShareInventoryDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (copiedToClipboard) "¡Código copiado al portapapeles!" else "Copiar código de sincronización")
+                        Text(
+                            if (copiedToClipboard) {
+                                stringResource(R.string.sync_copied_btn)
+                            } else {
+                                stringResource(R.string.sync_copy_token_btn)
+                            }
+                        )
                     }
 
+                    if (onExportFullBackup != null) {
+                        val chooserTitle = stringResource(R.string.settings_share_backup)
+                        OutlinedButton(
+                            onClick = {
+                                onExportFullBackup { json ->
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        putExtra(Intent.EXTRA_TEXT, json)
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.settings_share_backup))
+                        }
+                    }
                 } else {
-                    // --- TAB RECIBIR / ACTUALIZAR ---
                     Text(
-                        text = "Pega aquí el código o mensaje recibido del otro dispositivo:",
+                        text = stringResource(R.string.sync_import_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -180,7 +205,7 @@ fun ShareInventoryDialog(
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        placeholder = { Text("Pega el código RECETARIO_SYNC_V1:... o texto aquí") },
+                        placeholder = { Text(stringResource(R.string.sync_import_placeholder)) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("import_token_field"),
@@ -195,7 +220,7 @@ fun ShareInventoryDialog(
                                 },
                                 modifier = Modifier.padding(end = 4.dp)
                             ) {
-                                Text("Pegar", fontSize = 11.sp)
+                                Text(stringResource(R.string.action_paste), fontSize = 11.sp)
                             }
                         }
                     )
@@ -213,7 +238,7 @@ fun ShareInventoryDialog(
                                 Icon(Icons.Default.Check, contentDescription = null, tint = StockGreen, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "¡Código válido! Contiene ${parsedItems.size} provisiones.",
+                                    text = stringResource(R.string.sync_valid_pantry, parsedItems.size),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     color = StockGreen
@@ -221,7 +246,6 @@ fun ShareInventoryDialog(
                             }
                         }
 
-                        // Merge Options
                         Column {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -229,7 +253,7 @@ fun ShareInventoryDialog(
                             ) {
                                 RadioButton(selected = mergeMode, onClick = { mergeMode = true })
                                 Text(
-                                    text = "Fusionar / Actualizar existencias (Recomendado)",
+                                    text = stringResource(R.string.sync_merge_opt),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -239,14 +263,62 @@ fun ShareInventoryDialog(
                             ) {
                                 RadioButton(selected = !mergeMode, onClick = { mergeMode = false })
                                 Text(
-                                    text = "Reemplazar completamente mi despensa",
+                                    text = stringResource(R.string.sync_replace_opt),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    } else if (parsedBackup != null) {
+                        Surface(
+                            color = StockGreen.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = StockGreen, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.sync_valid_full,
+                                        parsedBackup.recipes.size,
+                                        parsedBackup.pantry.size,
+                                        parsedBackup.shopping.size
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StockGreen
+                                )
+                            }
+                        }
+
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                RadioButton(selected = mergeMode, onClick = { mergeMode = true })
+                                Text(
+                                    text = stringResource(R.string.sync_merge_opt),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                RadioButton(selected = !mergeMode, onClick = { mergeMode = false })
+                                Text(
+                                    text = stringResource(R.string.sync_replace_opt),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
                     } else if (inputText.isNotBlank()) {
                         Text(
-                            text = "Código o formato no reconocido. Asegúrate de copiar el mensaje completo que comienza con RECETARIO_SYNC_V1:...",
+                            text = stringResource(R.string.sync_invalid_token),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -263,18 +335,28 @@ fun ShareInventoryDialog(
                     },
                     modifier = Modifier.testTag("apply_import_button")
                 ) {
-                    Text("Actualizar Despensa")
+                    Text(stringResource(R.string.sync_apply_btn))
+                }
+            } else if (selectedTab == 1 && parsedBackup != null && onImportFullBackup != null) {
+                Button(
+                    onClick = {
+                        onImportFullBackup(inputText, !mergeMode)
+                        onDismiss()
+                    },
+                    modifier = Modifier.testTag("apply_import_button")
+                ) {
+                    Text(stringResource(R.string.sync_apply_btn))
                 }
             } else {
                 TextButton(onClick = onDismiss) {
-                    Text("Cerrar")
+                    Text(stringResource(R.string.action_close))
                 }
             }
         },
         dismissButton = {
-            if (selectedTab == 1 && parsedItems != null) {
+            if (selectedTab == 1 && (parsedItems != null || (parsedBackup != null && onImportFullBackup != null))) {
                 TextButton(onClick = onDismiss) {
-                    Text("Cancelar")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         }

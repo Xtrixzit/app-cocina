@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,21 +23,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LocalDining
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
@@ -49,27 +42,20 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,18 +63,41 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.Recipe
+import com.example.data.model.RecipeIngredient
+import com.example.settings.AppSettingsPreferences
 import com.example.ui.components.CookingTimerDialog
+import com.example.ui.components.NotebookBackStamp
+import com.example.ui.components.PostItButton
+import com.example.ui.components.PostItCard
+import com.example.ui.components.PostItFilterChip
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
+import com.example.ui.theme.PostItMint
+import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
+import com.example.util.ImageUtils
+import com.example.util.LocalizedLabels
+import com.example.util.UnitConverter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -105,6 +114,10 @@ fun RecipeDetailScreen(
 ) {
     BackHandler { onBack() }
 
+    val context = LocalContext.current
+    val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
+    val marginPercent by AppSettingsPreferences.observeMarginPercent(context).collectAsStateWithLifecycle()
+
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var activeTimerMinutes by remember { mutableStateOf<Int?>(null) }
     var activeTimerLabel by remember { mutableStateOf("") }
@@ -113,15 +126,13 @@ fun RecipeDetailScreen(
 
     val completedSteps = remember { mutableStateListOf<Int>() }
 
-    // Multiplier for proportional ingredient scaling
     val scaleFactor = targetServings.toDouble() / recipe.servings.coerceAtLeast(1)
 
-    // Check shortage and compute ingredient costs
     var missingIngredientsCount = 0
     var totalProductionCost = 0.0
 
     data class IngredientCostDetail(
-        val ingredient: com.example.data.model.RecipeIngredient,
+        val ingredient: RecipeIngredient,
         val scaledAmount: Double,
         val unitCost: Double,
         val lineTotal: Double,
@@ -129,16 +140,21 @@ fun RecipeDetailScreen(
         val isFromPantry: Boolean
     )
 
+    val labelPantry = stringResource(R.string.recipe_detail_origin_pantry)
+    val labelManual = stringResource(R.string.recipe_detail_origin_manual)
+    val labelNoCost = stringResource(R.string.recipe_detail_origin_none)
+
     val costBreakdown = recipe.ingredients.map { ing ->
         val needed = ing.amount * scaleFactor
         val inStockItem = pantryItems.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
-        val inStock = inStockItem?.quantity ?: 0.0
-        if (inStock < needed) {
+        val inStockConverted = UnitConverter.availableInTargetUnit(inStockItem, ing.unit)
+        if (inStockConverted + 0.0001 < needed) {
             missingIngredientsCount++
         }
 
+        val pantryUnitCost = UnitConverter.unitCostInTargetUnit(inStockItem, ing.unit)
         val effectiveUnitCost = when {
-            inStockItem != null && inStockItem.unitCost > 0.0 -> inStockItem.unitCost
+            pantryUnitCost > 0.0 -> pantryUnitCost
             ing.manualUnitCost > 0.0 -> ing.manualUnitCost
             else -> 0.0
         }
@@ -146,9 +162,9 @@ fun RecipeDetailScreen(
         totalProductionCost += lineCost
 
         val sourceLabel = when {
-            inStockItem != null && inStockItem.unitCost > 0.0 -> "Despensa"
-            ing.manualUnitCost > 0.0 -> "Manual"
-            else -> "Sin costo"
+            pantryUnitCost > 0.0 -> labelPantry
+            ing.manualUnitCost > 0.0 -> labelManual
+            else -> labelNoCost
         }
 
         IngredientCostDetail(
@@ -157,11 +173,13 @@ fun RecipeDetailScreen(
             unitCost = effectiveUnitCost,
             lineTotal = lineCost,
             sourceLabel = sourceLabel,
-            isFromPantry = inStockItem != null && inStockItem.unitCost > 0.0
+            isFromPantry = pantryUnitCost > 0.0
         )
     }
 
     val costPerServing = if (targetServings > 0) totalProductionCost / targetServings else 0.0
+    val suggestedTotalSale = AppSettingsPreferences.suggestedSellingPrice(totalProductionCost, marginPercent)
+    val suggestedPerServingSale = if (targetServings > 0) suggestedTotalSale / targetServings else 0.0
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -171,7 +189,7 @@ fun RecipeDetailScreen(
                     Text(
                         recipe.title,
                         maxLines = 1,
-                        fontFamily = com.example.ui.theme.CaveatFontFamily,
+                        fontFamily = CaveatFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 28.sp,
                         color = MaterialTheme.colorScheme.secondary
@@ -182,14 +200,14 @@ fun RecipeDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(start = 8.dp)
                     ) {
-                        com.example.ui.components.NotebookBackStamp(
+                        NotebookBackStamp(
                             onClick = onBack,
                             modifier = Modifier.testTag("recipe_detail_back")
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            "Main",
-                            fontFamily = com.example.ui.theme.CaveatFontFamily,
+                            stringResource(R.string.action_back_main),
+                            fontFamily = CaveatFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 22.sp,
                             color = MaterialTheme.colorScheme.primary
@@ -198,10 +216,10 @@ fun RecipeDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = onEdit, modifier = Modifier.testTag("recipe_detail_edit")) {
-                        Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit), tint = MaterialTheme.colorScheme.onSurface)
                     }
                     IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.testTag("recipe_detail_delete")) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -220,7 +238,6 @@ fun RecipeDetailScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Final Product Photo Banner (if present)
             if (recipe.imageUrl.isNotBlank()) {
                 Box(
                     modifier = Modifier
@@ -232,8 +249,8 @@ fun RecipeDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
-                        model = recipe.imageUrl,
-                        contentDescription = "Foto de ${recipe.title}",
+                        model = ImageUtils.toImageModel(recipe.imageUrl),
+                        contentDescription = stringResource(R.string.recipe_detail_photo_cd, recipe.title),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
@@ -242,7 +259,6 @@ fun RecipeDetailScreen(
                 }
             }
 
-            // Category & Difficulty Banner
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -253,7 +269,7 @@ fun RecipeDetailScreen(
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
-                        text = recipe.category,
+                        text = LocalizedLabels.recipeCategory(context, recipe.category),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold,
@@ -266,7 +282,10 @@ fun RecipeDetailScreen(
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
-                        text = "Dificultad: ${recipe.difficulty}",
+                        text = stringResource(
+                            R.string.recipe_detail_difficulty,
+                            LocalizedLabels.difficulty(context, recipe.difficulty)
+                        ),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -274,7 +293,6 @@ fun RecipeDetailScreen(
                 }
             }
 
-            // Prep & Cook Times with Direct Timer Trigger Buttons
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(8.dp),
@@ -290,22 +308,34 @@ fun RecipeDetailScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Prep Time
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Preparación", fontFamily = com.example.ui.theme.CaveatFontFamily, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${recipe.prepTimeMinutes} min", fontFamily = com.example.ui.theme.CaveatFontFamily, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.recipe_detail_prep),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            stringResource(R.string.recipe_card_minutes, recipe.prepTimeMinutes),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                         if (recipe.prepTimeMinutes > 0) {
-                            com.example.ui.components.PostItButton(
-                                text = "Temporizador",
+                            val prepTimerTitle = stringResource(R.string.recipe_detail_timer_prep_label, recipe.title)
+                            PostItButton(
+                                text = stringResource(R.string.recipe_detail_timer),
                                 icon = Icons.Default.Timer,
                                 onClick = {
                                     activeTimerMinutes = recipe.prepTimeMinutes
-                                    activeTimerLabel = "Prep: ${recipe.title}"
+                                    activeTimerLabel = prepTimerTitle
                                 },
-                                backgroundColor = com.example.ui.theme.PostItYellow,
+                                backgroundColor = PostItYellow,
                                 fontSize = 17.sp,
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.padding(top = 4.dp).testTag("timer_prep_button")
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .testTag("timer_prep_button")
                             )
                         }
                     }
@@ -316,29 +346,41 @@ fun RecipeDetailScreen(
                             .width(1.dp)
                     )
 
-                    // Cook Time
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Cocción", fontFamily = com.example.ui.theme.CaveatFontFamily, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${recipe.cookTimeMinutes} min", fontFamily = com.example.ui.theme.CaveatFontFamily, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.recipe_detail_cook),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            stringResource(R.string.recipe_card_minutes, recipe.cookTimeMinutes),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                         if (recipe.cookTimeMinutes > 0) {
-                            com.example.ui.components.PostItButton(
-                                text = "Temporizador",
+                            val cookTimerTitle = stringResource(R.string.recipe_detail_timer_cook_label, recipe.title)
+                            PostItButton(
+                                text = stringResource(R.string.recipe_detail_timer),
                                 icon = Icons.Default.Timer,
                                 onClick = {
                                     activeTimerMinutes = recipe.cookTimeMinutes
-                                    activeTimerLabel = "Cocción: ${recipe.title}"
+                                    activeTimerLabel = cookTimerTitle
                                 },
-                                backgroundColor = com.example.ui.theme.PostItMint,
+                                backgroundColor = PostItMint,
                                 fontSize = 17.sp,
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.padding(top = 4.dp).testTag("timer_cook_button")
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .testTag("timer_cook_button")
                             )
                         }
                     }
                 }
             }
 
-            // --- CALCULADORA DE PORCIONES (DYNAMIC SERVING SCALER) ---
+            // Servings Scaler
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(8.dp),
@@ -355,27 +397,26 @@ fun RecipeDetailScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Calculadora de Porciones",
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = stringResource(R.string.recipe_detail_servings_calc),
+                                fontFamily = CaveatFontFamily,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Base de la receta: ${recipe.servings} porciones",
-                                fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                text = stringResource(R.string.recipe_detail_base_servings, recipe.servings),
+                                fontFamily = PatrickHandFontFamily,
                                 fontSize = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
-                        // Stepper (- / +)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             FilledTonalIconButton(
                                 onClick = { onServingsChanged(targetServings - 1) },
                                 enabled = targetServings > 1,
                                 modifier = Modifier.testTag("servings_decrease")
                             ) {
-                                Icon(Icons.Default.Remove, contentDescription = "Menos porciones")
+                                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.recipe_detail_less_servings))
                             }
 
                             AnimatedContent(
@@ -391,7 +432,7 @@ fun RecipeDetailScreen(
                             ) { servings ->
                                 Text(
                                     text = "$servings",
-                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    fontFamily = CaveatFontFamily,
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     modifier = Modifier
@@ -404,36 +445,35 @@ fun RecipeDetailScreen(
                                 onClick = { onServingsChanged(targetServings + 1) },
                                 modifier = Modifier.testTag("servings_increase")
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "Más porciones")
+                                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.recipe_detail_more_servings))
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Preset Multiplier Post-It Chips
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         listOf(
-                            "Base (${recipe.servings})" to recipe.servings,
-                            "Doble (${recipe.servings * 2})" to (recipe.servings * 2),
-                            "Triple (${recipe.servings * 3})" to (recipe.servings * 3),
-                            "Mitad (${(recipe.servings / 2).coerceAtLeast(1)})" to (recipe.servings / 2).coerceAtLeast(1)
+                            stringResource(R.string.recipe_detail_preset_base, recipe.servings) to recipe.servings,
+                            stringResource(R.string.recipe_detail_preset_double, recipe.servings * 2) to (recipe.servings * 2),
+                            stringResource(R.string.recipe_detail_preset_triple, recipe.servings * 3) to (recipe.servings * 3),
+                            stringResource(R.string.recipe_detail_preset_half, (recipe.servings / 2).coerceAtLeast(1)) to (recipe.servings / 2).coerceAtLeast(1)
                         ).forEach { (label, value) ->
-                            com.example.ui.components.PostItFilterChip(
+                            PostItFilterChip(
                                 selected = targetServings == value,
                                 onClick = { onServingsChanged(value) },
                                 text = label,
-                                selectedColor = com.example.ui.theme.PostItPeach
+                                selectedColor = PostItPeach
                             )
                         }
                     }
                 }
             }
 
-            // --- TICKET DE COSTO DE PRODUCCIÓN (PRODUCTION COST TICKET) ---
+            // Production Cost Ticket
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -449,37 +489,52 @@ fun RecipeDetailScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Presupuesto y Costos",
+                                text = stringResource(R.string.recipe_detail_cost_title),
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.secondary,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Cálculo para $targetServings porciones",
+                                text = stringResource(R.string.recipe_detail_cost_sub, targetServings),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
-                        // Big Total Display
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "Costo Total",
+                                text = stringResource(R.string.recipe_detail_cost_total),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "$${"%.2f".format(totalProductionCost)}",
+                                text = AppSettingsPreferences.formatMoney(totalProductionCost, currency),
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "($${"%.2f".format(costPerServing)} / porción)",
+                                text = stringResource(
+                                    R.string.recipe_detail_cost_per_serving,
+                                    AppSettingsPreferences.formatMoney(costPerServing, currency)
+                                ),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            if (totalProductionCost > 0.0) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.recipe_detail_suggested_sale,
+                                        marginPercent,
+                                        AppSettingsPreferences.formatMoney(suggestedTotalSale, currency),
+                                        AppSettingsPreferences.formatMoney(suggestedPerServingSale, currency)
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StockGreen
+                                )
+                            }
                         }
                     }
 
@@ -491,7 +546,7 @@ fun RecipeDetailScreen(
                     )
 
                     Text(
-                        text = "Desglose por ingrediente (toca uno para asignar/editar costo):",
+                        text = stringResource(R.string.recipe_detail_cost_breakdown_hint),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold
@@ -500,8 +555,13 @@ fun RecipeDetailScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     costBreakdown.forEachIndexed { index, itemCost ->
-                        val formattedAmount = if (itemCost.scaledAmount % 1.0 == 0.0) itemCost.scaledAmount.toInt().toString() else "%.1f".format(itemCost.scaledAmount)
-                        val formattedLine = "%.2f".format(itemCost.lineTotal)
+                        val formattedAmount = formatQty(itemCost.scaledAmount)
+                        val displayUnit = LocalizedLabels.unit(context, itemCost.ingredient.unit)
+                        val rateText = if (itemCost.unitCost > 0.0) {
+                            "${AppSettingsPreferences.formatMoney(itemCost.unitCost, currency, forceFourDecimalsIfTiny = true)}/$displayUnit"
+                        } else {
+                            labelNoCost
+                        }
 
                         Row(
                             modifier = Modifier
@@ -516,29 +576,37 @@ fun RecipeDetailScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "${itemCost.ingredient.name} ($formattedAmount ${itemCost.ingredient.unit})",
+                                    text = "${itemCost.ingredient.name} ($formattedAmount $displayUnit)",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Origen: ${itemCost.sourceLabel} • ${if (itemCost.unitCost > 0) "$${if (itemCost.unitCost < 0.01) "%.4f".format(itemCost.unitCost) else "%.2f".format(itemCost.unitCost)}/${itemCost.ingredient.unit}" else "Sin costo"}",
+                                    text = stringResource(
+                                        R.string.recipe_detail_origin_line,
+                                        itemCost.sourceLabel,
+                                        rateText
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (itemCost.isFromPantry) com.example.ui.theme.StockGreen else if (itemCost.unitCost > 0.0) MaterialTheme.colorScheme.secondary else com.example.ui.theme.StockYellow,
+                                    color = if (itemCost.isFromPantry) StockGreen else if (itemCost.unitCost > 0.0) MaterialTheme.colorScheme.secondary else StockYellow,
                                     fontSize = 11.sp
                                 )
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = if (itemCost.lineTotal > 0.0) "$$formattedLine" else "Pendiente",
+                                    text = if (itemCost.lineTotal > 0.0) {
+                                        AppSettingsPreferences.formatMoney(itemCost.lineTotal, currency)
+                                    } else {
+                                        stringResource(R.string.recipe_detail_pending)
+                                    },
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (itemCost.lineTotal > 0.0) MaterialTheme.colorScheme.onSurface else com.example.ui.theme.StockYellow
+                                    color = if (itemCost.lineTotal > 0.0) MaterialTheme.colorScheme.onSurface else StockYellow
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
                                     Icons.Default.Edit,
-                                    contentDescription = "Editar costo",
+                                    contentDescription = stringResource(R.string.recipe_detail_edit_cost_cd),
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
@@ -548,7 +616,7 @@ fun RecipeDetailScreen(
                 }
             }
 
-            // --- INGREDIENTES LIST WITH PANTRY AVAILABILITY CHECK ---
+            // Ingredients list with unit-aware pantry check
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -556,7 +624,7 @@ fun RecipeDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Ingredientes calculados ($targetServings porc.)",
+                        text = stringResource(R.string.recipe_detail_ingredients_calc, targetServings),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -573,7 +641,7 @@ fun RecipeDetailScreen(
                                 Icon(Icons.Default.Warning, contentDescription = null, tint = StockYellow, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Faltan $missingIngredientsCount",
+                                    text = stringResource(R.string.recipe_detail_missing_count, missingIngredientsCount),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = StockYellow,
                                     fontWeight = FontWeight.Bold
@@ -592,7 +660,7 @@ fun RecipeDetailScreen(
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StockGreen, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "¡Todo en despensa!",
+                                    text = stringResource(R.string.recipe_detail_all_in_pantry),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = StockGreen,
                                     fontWeight = FontWeight.Bold
@@ -604,17 +672,14 @@ fun RecipeDetailScreen(
 
                 recipe.ingredients.forEach { ingredient ->
                     val scaledAmount = ingredient.amount * scaleFactor
-                    val formattedScaled = if (scaledAmount % 1.0 == 0.0) {
-                        scaledAmount.toInt().toString()
-                    } else {
-                        "%.1f".format(scaledAmount)
-                    }
+                    val formattedScaled = formatQty(scaledAmount)
+                    val displayRecipeUnit = LocalizedLabels.unit(context, ingredient.unit)
 
                     val inStockItem = pantryItems.find {
                         it.name.trim().equals(ingredient.name.trim(), ignoreCase = true)
                     }
-                    val inStockQty = inStockItem?.quantity ?: 0.0
-                    val isSufficient = inStockQty >= scaledAmount
+                    val convertedStock = UnitConverter.availableInTargetUnit(inStockItem, ingredient.unit)
+                    val isSufficient = convertedStock + 0.0001 >= scaledAmount
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -639,16 +704,22 @@ fun RecipeDetailScreen(
                                 )
 
                                 val stockText = if (inStockItem != null) {
-                                    val formattedInStock = if (inStockQty % 1.0 == 0.0) inStockQty.toInt().toString() else "%.1f".format(inStockQty)
+                                    val formattedNativeStock = formatQty(inStockItem.quantity)
+                                    val nativeUnit = LocalizedLabels.unit(context, inStockItem.unit)
                                     if (isSufficient) {
-                                        "✓ Tienes $formattedInStock ${inStockItem.unit} en despensa"
+                                        stringResource(R.string.recipe_detail_stock_ok, formattedNativeStock, nativeUnit)
                                     } else {
-                                        val shortage = scaledAmount - inStockQty
-                                        val formattedShortage = if (shortage % 1.0 == 0.0) shortage.toInt().toString() else "%.1f".format(shortage)
-                                        "⚠ Falta $formattedShortage ${ingredient.unit} (Tienes $formattedInStock)"
+                                        val shortage = (scaledAmount - convertedStock).coerceAtLeast(0.0)
+                                        val formattedShortage = formatQty(shortage)
+                                        stringResource(
+                                            R.string.recipe_detail_stock_short,
+                                            formattedShortage,
+                                            displayRecipeUnit,
+                                            "$formattedNativeStock $nativeUnit"
+                                        )
                                     }
                                 } else {
-                                    "✗ No está en tu despensa"
+                                    stringResource(R.string.recipe_detail_stock_missing)
                                 }
 
                                 Text(
@@ -664,7 +735,7 @@ fun RecipeDetailScreen(
                                 color = MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 Text(
-                                    text = "$formattedScaled ${ingredient.unit}",
+                                    text = "$formattedScaled $displayRecipeUnit",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -675,15 +746,15 @@ fun RecipeDetailScreen(
                     }
                 }
 
-                // Button to add shortages to shopping list
-                com.example.ui.components.PostItButton(
-                    text = if (missingIngredientsCount > 0)
-                        "Agregar faltantes a Lista de Compras ($missingIngredientsCount)"
-                    else
-                        "Verificar y agregar ingredientes a Compras",
+                PostItButton(
+                    text = if (missingIngredientsCount > 0) {
+                        stringResource(R.string.recipe_detail_add_missing, missingIngredientsCount)
+                    } else {
+                        stringResource(R.string.recipe_detail_check_shopping)
+                    },
                     icon = Icons.Default.ShoppingCart,
                     onClick = onAddMissingToShoppingList,
-                    backgroundColor = com.example.ui.theme.PostItMint,
+                    backgroundColor = PostItMint,
                     rotationDegrees = -0.8f,
                     fontSize = 20.sp,
                     modifier = Modifier
@@ -693,12 +764,11 @@ fun RecipeDetailScreen(
                 )
             }
 
-            // --- INSTRUCTIONS STEP BY STEP ---
             if (recipe.instructions.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Pasos de preparación (toca para marcar)",
-                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                    text = stringResource(R.string.recipe_detail_steps_title),
+                    fontFamily = CaveatFontFamily,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -733,15 +803,15 @@ fun RecipeDetailScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = "Paso ${index + 1}",
-                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    text = stringResource(R.string.recipe_detail_step_num, index + 1),
+                                    fontFamily = CaveatFontFamily,
                                     fontSize = 20.sp,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = step,
-                                    fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                    fontFamily = PatrickHandFontFamily,
                                     fontSize = 17.sp,
                                     color = if (isChecked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                                 )
@@ -751,33 +821,30 @@ fun RecipeDetailScreen(
                 }
             }
 
-            // Chef notes Post-It
             if (recipe.notes.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-                com.example.ui.components.PostItCard(
-                    backgroundColor = com.example.ui.theme.PostItYellow,
+                PostItCard(
+                    backgroundColor = PostItYellow,
                     rotationDegrees = 1f,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "💡 Consejos del Chef",
-                        fontFamily = com.example.ui.theme.CaveatFontFamily,
+                        text = stringResource(R.string.recipe_detail_chef_notes),
+                        fontFamily = CaveatFontFamily,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isDark) androidx.compose.ui.graphics.Color(0xFFFDE047) else androidx.compose.ui.graphics.Color(0xFF1E3A8A)
+                        color = Color(0xFF1E3A8A)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = recipe.notes,
-                        fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                        fontFamily = PatrickHandFontFamily,
                         fontSize = 17.sp,
-                        color = if (isDark) androidx.compose.ui.graphics.Color(0xFFF4F4F5) else androidx.compose.ui.graphics.Color(0xFF18181B)
+                        color = Color(0xFF18181B)
                     )
                 }
             }
 
-            // Bottom Page Navigation matching reference image ("Main" & Red Stamp)
             Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier
@@ -793,11 +860,11 @@ fun RecipeDetailScreen(
                         .clickable { onBack() }
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    com.example.ui.components.NotebookBackStamp(onClick = onBack)
+                    NotebookBackStamp(onClick = onBack)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Main",
-                        fontFamily = com.example.ui.theme.CaveatFontFamily,
+                        text = stringResource(R.string.action_back_main),
+                        fontFamily = CaveatFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 26.sp,
                         color = MaterialTheme.colorScheme.primary
@@ -805,8 +872,8 @@ fun RecipeDetailScreen(
                 }
 
                 Text(
-                    text = "Recetario",
-                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                    text = stringResource(R.string.app_name),
+                    fontFamily = CaveatFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 22.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -817,7 +884,6 @@ fun RecipeDetailScreen(
         }
     }
 
-    // Active Timer Dialog
     if (activeTimerMinutes != null) {
         CookingTimerDialog(
             initialMinutes = activeTimerMinutes ?: 5,
@@ -826,12 +892,11 @@ fun RecipeDetailScreen(
         )
     }
 
-    // Confirm Delete Dialog
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("¿Eliminar receta?") },
-            text = { Text("Esta acción eliminará '${recipe.title}' de forma permanente.") },
+            title = { Text(stringResource(R.string.recipe_detail_delete_title)) },
+            text = { Text(stringResource(R.string.recipe_detail_delete_body, recipe.title)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -840,36 +905,41 @@ fun RecipeDetailScreen(
                     },
                     modifier = Modifier.testTag("confirm_delete_recipe")
                 ) {
-                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancelar")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
     }
 
-    // Quick Edit Manual Cost Dialog
     if (editingCostIngredientIndex != null) {
         val idx = editingCostIngredientIndex!!
         val targetIngredient = recipe.ingredients.getOrNull(idx)
         if (targetIngredient != null) {
+            val unitLabel = LocalizedLabels.unit(context, targetIngredient.unit)
             AlertDialog(
                 onDismissRequest = { editingCostIngredientIndex = null },
-                title = { Text("Costo para ${targetIngredient.name}", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        stringResource(R.string.recipe_detail_manual_cost_title, targetIngredient.name),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "Ingresa el costo unitario por ${targetIngredient.unit} para calcular el costo de la receta cuando no esté en despensa:",
+                            text = stringResource(R.string.recipe_detail_manual_cost_desc, unitLabel),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         OutlinedTextField(
                             value = manualCostInputText,
                             onValueChange = { manualCostInputText = it },
-                            label = { Text("Costo ($ / ${targetIngredient.unit})") },
-                            placeholder = { Text("Ej. 0.002") },
+                            label = { Text(stringResource(R.string.recipe_detail_manual_cost_label, currency.symbol, unitLabel)) },
+                            placeholder = { Text(stringResource(R.string.recipe_detail_manual_cost_hint)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -882,20 +952,27 @@ fun RecipeDetailScreen(
                             val newCost = manualCostInputText.toDoubleOrNull() ?: 0.0
                             val updatedIngredients = recipe.ingredients.toMutableList()
                             updatedIngredients[idx] = targetIngredient.copy(manualUnitCost = newCost)
-                            val updatedRecipe = recipe.copy(ingredients = updatedIngredients)
-                            onUpdateRecipe(updatedRecipe)
+                            onUpdateRecipe(recipe.copy(ingredients = updatedIngredients))
                             editingCostIngredientIndex = null
                         }
                     ) {
-                        Text("Guardar Costo")
+                        Text(stringResource(R.string.recipe_detail_manual_cost_save))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { editingCostIngredientIndex = null }) {
-                        Text("Cancelar")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 }
             )
         }
+    }
+}
+
+private fun formatQty(value: Double): String {
+    return if (value % 1.0 == 0.0) {
+        value.toInt().toString()
+    } else {
+        String.format(Locale.US, "%.1f", value)
     }
 }

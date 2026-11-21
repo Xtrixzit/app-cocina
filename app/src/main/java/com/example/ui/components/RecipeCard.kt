@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.BreakfastDining
@@ -46,17 +44,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.model.Recipe
+import com.example.settings.AppSettingsPreferences
+import com.example.settings.CurrencyOption
 import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItTape
 import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockYellow
+import com.example.util.ImageUtils
+import com.example.util.LocalizedLabels
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -64,10 +70,11 @@ fun RecipeCard(
     recipe: Recipe,
     feasibilityMatchPct: Int?,
     estimatedCost: Double? = null,
+    currency: CurrencyOption = CurrencyOption.USD,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val context = LocalContext.current
 
     val categoryGradient = when (recipe.category.lowercase()) {
         "desayunos" -> listOf(Color(0xFFEA580C), Color(0xFFFBBF24))
@@ -90,7 +97,7 @@ fun RecipeCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .sketchedBorder(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.65f else 0.85f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                 strokeWidthDp = 1.8f
             )
             .stampClickable(onClick = onClick)
@@ -105,7 +112,7 @@ fun RecipeCard(
                     .align(Alignment.TopEnd)
                     .offset(x = (-16).dp, y = (-4).dp)
                     .size(width = 38.dp, height = 10.dp)
-                    .background(if (isDark) Color(0x55FFFFFF) else PostItTape, RoundedCornerShape(1.dp))
+                    .background(PostItTape, RoundedCornerShape(1.dp))
             )
 
             Column(modifier = Modifier.padding(14.dp)) {
@@ -115,13 +122,12 @@ fun RecipeCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Category pill with hand drawn font
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
                     ) {
                         Text(
-                            text = recipe.category.uppercase(),
+                            text = LocalizedLabels.recipeCategory(context, recipe.category).uppercase(),
                             fontFamily = CaveatFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
@@ -130,7 +136,6 @@ fun RecipeCard(
                         )
                     }
 
-                    // Pantry Feasibility Indicator
                     if (feasibilityMatchPct != null) {
                         val isFull = feasibilityMatchPct >= 100
                         val statusColor by animateColorAsState(
@@ -155,7 +160,11 @@ fun RecipeCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isFull) "100% en despensa" else "$feasibilityMatchPct% en despensa",
+                                    text = if (isFull) {
+                                        stringResource(R.string.recipe_card_pantry_full)
+                                    } else {
+                                        stringResource(R.string.recipe_card_pantry_pct, feasibilityMatchPct)
+                                    },
                                     fontFamily = PatrickHandFontFamily,
                                     fontSize = 14.sp,
                                     color = statusColor,
@@ -168,23 +177,22 @@ fun RecipeCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Notebook Layout: Polaroid / Sketched Food Frame + Handwritten Title & Info (like the reference image)
+                // Notebook Layout: Polaroid / Sketched Food Frame + Handwritten Title & Info
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Polaroid Photo Frame with sketched border
                     Box(
                         modifier = Modifier
                             .size(76.dp)
                             .shadow(2.dp, RoundedCornerShape(3.dp))
                             .background(
-                                color = if (isDark) Color(0xFF27272A) else Color(0xFFFFFDF8),
+                                color = Color(0xFFFFFDF8),
                                 shape = RoundedCornerShape(3.dp)
                             )
                             .sketchedBorder(
-                                color = if (isDark) Color(0xFF52525B) else Color(0xFF18181B),
+                                color = Color(0xFF18181B),
                                 strokeWidthDp = 1.6f
                             )
                             .padding(4.dp),
@@ -192,7 +200,7 @@ fun RecipeCard(
                     ) {
                         if (recipe.imageUrl.isNotBlank()) {
                             AsyncImage(
-                                model = recipe.imageUrl,
+                                model = ImageUtils.toImageModel(recipe.imageUrl),
                                 contentDescription = recipe.title,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -217,7 +225,6 @@ fun RecipeCard(
                         }
                     }
 
-                    // Recipe Title and Handwritten Notes
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = recipe.title,
@@ -231,7 +238,10 @@ fun RecipeCard(
                         Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
-                            text = "Difficulty: ${recipe.difficulty}",
+                            text = stringResource(
+                                R.string.recipe_card_difficulty,
+                                LocalizedLabels.difficulty(context, recipe.difficulty)
+                            ),
                             fontFamily = PatrickHandFontFamily,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -242,36 +252,33 @@ fun RecipeCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Detail Pills Row
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Estimated Cost Tag
                     if (estimatedCost != null && estimatedCost > 0.0) {
                         val perServing = estimatedCost / recipe.servings.coerceAtLeast(1)
+                        val totalFormatted = AppSettingsPreferences.formatMoney(estimatedCost, currency)
+                        val perServingFormatted = AppSettingsPreferences.formatMoney(perServing, currency)
                         DetailPill(
                             icon = Icons.Default.MonetizationOn,
-                            text = "$${"%.2f".format(estimatedCost)} ($${"%.2f".format(perServing)}/p)"
+                            text = "$totalFormatted ($perServingFormatted/p)"
                         )
                     }
 
-                    // Servings Pill
                     DetailPill(
                         icon = Icons.Default.People,
-                        text = "${recipe.servings} porc."
+                        text = stringResource(R.string.recipe_card_servings, recipe.servings)
                     )
 
-                    // Time Pill
                     DetailPill(
                         icon = Icons.Default.AccessTime,
-                        text = "${recipe.totalTimeMinutes} min"
+                        text = stringResource(R.string.recipe_card_minutes, recipe.totalTimeMinutes)
                     )
 
-                    // Ingredients Pill
                     DetailPill(
                         icon = Icons.Default.LocalDining,
-                        text = "${recipe.ingredients.size} ingr."
+                        text = stringResource(R.string.recipe_card_ingredients, recipe.ingredients.size)
                     )
                 }
             }

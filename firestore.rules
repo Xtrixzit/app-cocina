@@ -32,22 +32,25 @@ service cloud.firestore {
       return data.userId == request.auth.uid &&
              data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
              (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
-             data.servings is number && data.servings >= 1 && data.servings <= 100 &&
+             data.servings is number && data.servings >= 1 && data.servings <= 1000 &&
              data.prepTimeMinutes is number && data.prepTimeMinutes >= 0 && data.prepTimeMinutes <= 1440 &&
              data.cookTimeMinutes is number && data.cookTimeMinutes >= 0 && data.cookTimeMinutes <= 1440 &&
-             (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() <= 20)) &&
-             data.ingredients is list && data.ingredients.size() <= 100 &&
-             data.instructions is list && data.instructions.size() <= 100 &&
-             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000));
+             (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() <= 30)) &&
+             data.ingredients is list && data.ingredients.size() <= 150 &&
+             data.instructions is list && data.instructions.size() <= 150 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 5000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 80000));
     }
 
     function isValidPantryItem(data) {
       return data.userId == request.auth.uid &&
              data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
              (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
-             data.quantity is number && data.quantity >= 0 && data.quantity <= 100000 &&
-             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 20 &&
-             (!('minQuantity' in data) || (data.minQuantity is number && data.minQuantity >= 0 && data.minQuantity <= 100000)) &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 1000000 &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 30 &&
+             (!('minQuantity' in data) || (data.minQuantity is number && data.minQuantity >= 0 && data.minQuantity <= 1000000)) &&
+             (!('cost' in data) || (data.cost is number && data.cost >= 0 && data.cost <= 1000000)) &&
+             (!('costBaseQuantity' in data) || (data.costBaseQuantity is number && data.costBaseQuantity >= 0 && data.costBaseQuantity <= 1000000)) &&
              (!('expirationDate' in data) || (data.expirationDate is string && data.expirationDate.size() <= 50));
     }
 
@@ -55,15 +58,74 @@ service cloud.firestore {
       return data.userId == request.auth.uid &&
              data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
              (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
-             data.quantity is number && data.quantity >= 0 && data.quantity <= 100000 &&
-             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 20 &&
+             data.quantity is number && data.quantity >= 0 && data.quantity <= 1000000 &&
+             data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 30 &&
              data.isPurchased is bool &&
              (!('recipeSource' in data) || (data.recipeSource is string && data.recipeSource.size() <= 200));
     }
 
-    // 2. User Subcollections
+    function isValidProductionLog(data) {
+      return data.userId == request.auth.uid &&
+             data.recipeId is string && data.recipeId.size() >= 1 && data.recipeId.size() <= 128 &&
+             data.recipeTitle is string && data.recipeTitle.size() >= 1 && data.recipeTitle.size() <= 200 &&
+             data.servingsProduced is number && data.servingsProduced >= 1 && data.servingsProduced <= 100000 &&
+             data.scaleFactor is number && data.scaleFactor > 0 && data.scaleFactor <= 10000 &&
+             data.totalCost is number && data.totalCost >= 0 && data.totalCost <= 100000000 &&
+             data.suggestedSellingPrice is number && data.suggestedSellingPrice >= 0 && data.suggestedSellingPrice <= 100000000 &&
+             (!('currencyCode' in data) || (data.currencyCode is string && data.currencyCode.size() <= 16)) &&
+             (!('deductedIngredientsCount' in data) || (data.deductedIngredientsCount is number && data.deductedIngredientsCount >= 0 && data.deductedIngredientsCount <= 500));
+    }
+
+    function isValidUserAccount(data) {
+      return data.userId == request.auth.uid &&
+             data.email is string && data.email.size() <= 200 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 1000));
+    }
+
+    // 2. Distribution Config (read-only doc get for update checker & license toggle)
+    match /app_config/{configId} {
+      allow get: if isSignedIn() && isValidId(configId);
+      allow list, create, update, delete: if false;
+    }
+
+    // 3. Commercial License Keys (no list; single key lookup and one-time UID claim)
+    match /licenses/{licenseCode} {
+      allow get: if isSignedIn() && isValidId(licenseCode);
+      allow list, create, delete: if false;
+
+      allow update: if isSignedIn() &&
+                       isValidId(licenseCode) &&
+                       existing().active == true &&
+                       (existing().assignedUid == '' || existing().assignedUid == request.auth.uid) &&
+                       incoming().active == existing().active &&
+                       incoming().assignedUid == request.auth.uid &&
+                       (!('assignedEmail' in incoming()) || (incoming().assignedEmail is string && incoming().assignedEmail.size() <= 200)) &&
+                       (!('activatedAt' in incoming()) || (incoming().activatedAt is timestamp && incoming().activatedAt <= request.time)) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['assignedUid', 'assignedEmail', 'activatedAt']);
+    }
+
+    // 4. User Profile & Subcollections
     match /users/{userId} {
       allow get, list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserAccount(incoming()) &&
+                       incoming().keys().hasAll(['userId', 'email', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'displayName', 'photoUrl', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time));
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserAccount(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoUrl', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
 
       // Recipes subcollection
       match /recipes/{recipeId} {
@@ -72,20 +134,20 @@ service cloud.firestore {
 
         allow create: if isOwner(userId) &&
                          isValidId(recipeId) &&
+                         isValidRecipe(incoming()) &&
                          incoming().userId == request.auth.uid &&
                          incoming().keys().hasAll(['userId', 'title', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'ingredients', 'instructions', 'createdAt']) &&
-                         incoming().keys().hasOnly(['userId', 'title', 'category', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'difficulty', 'ingredients', 'instructions', 'notes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'category', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'difficulty', 'ingredients', 'instructions', 'notes', 'imageUrl', 'createdAt', 'updatedAt']) &&
                          incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
-                         isValidRecipe(incoming());
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time));
 
         allow update: if isOwner(userId) &&
                          isValidId(recipeId) &&
+                         isValidRecipe(incoming()) &&
                          incoming().userId == existing().userId &&
                          incoming().createdAt == existing().createdAt &&
                          (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'difficulty', 'ingredients', 'instructions', 'notes', 'updatedAt']) &&
-                         isValidRecipe(incoming());
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'servings', 'prepTimeMinutes', 'cookTimeMinutes', 'difficulty', 'ingredients', 'instructions', 'notes', 'imageUrl', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(recipeId);
       }
@@ -97,20 +159,20 @@ service cloud.firestore {
 
         allow create: if isOwner(userId) &&
                          isValidId(pantryItemId) &&
+                         isValidPantryItem(incoming()) &&
                          incoming().userId == request.auth.uid &&
                          incoming().keys().hasAll(['userId', 'name', 'quantity', 'unit', 'createdAt']) &&
-                         incoming().keys().hasOnly(['userId', 'name', 'category', 'quantity', 'unit', 'minQuantity', 'expirationDate', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'category', 'quantity', 'unit', 'minQuantity', 'cost', 'costBaseQuantity', 'expirationDate', 'createdAt', 'updatedAt']) &&
                          incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
-                         isValidPantryItem(incoming());
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time));
 
         allow update: if isOwner(userId) &&
                          isValidId(pantryItemId) &&
+                         isValidPantryItem(incoming()) &&
                          incoming().userId == existing().userId &&
                          incoming().createdAt == existing().createdAt &&
                          (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'quantity', 'unit', 'minQuantity', 'expirationDate', 'updatedAt']) &&
-                         isValidPantryItem(incoming());
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'quantity', 'unit', 'minQuantity', 'cost', 'costBaseQuantity', 'expirationDate', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(pantryItemId);
       }
@@ -122,22 +184,39 @@ service cloud.firestore {
 
         allow create: if isOwner(userId) &&
                          isValidId(shoppingItemId) &&
+                         isValidShoppingItem(incoming()) &&
                          incoming().userId == request.auth.uid &&
                          incoming().keys().hasAll(['userId', 'name', 'quantity', 'unit', 'isPurchased', 'createdAt']) &&
                          incoming().keys().hasOnly(['userId', 'name', 'category', 'quantity', 'unit', 'isPurchased', 'recipeSource', 'createdAt', 'updatedAt']) &&
                          incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
-                         isValidShoppingItem(incoming());
+                         (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time));
 
         allow update: if isOwner(userId) &&
                          isValidId(shoppingItemId) &&
+                         isValidShoppingItem(incoming()) &&
                          incoming().userId == existing().userId &&
                          incoming().createdAt == existing().createdAt &&
                          (!('updatedAt' in incoming()) || (incoming().updatedAt is timestamp && incoming().updatedAt <= request.time)) &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'quantity', 'unit', 'isPurchased', 'recipeSource', 'updatedAt']) &&
-                         isValidShoppingItem(incoming());
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'quantity', 'unit', 'isPurchased', 'recipeSource', 'updatedAt']);
 
         allow delete: if isOwner(userId) && isValidId(shoppingItemId);
+      }
+
+      // Production logs subcollection (append + read + delete on account cleanup)
+      match /production_logs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         isValidProductionLog(incoming()) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'recipeId', 'recipeTitle', 'servingsProduced', 'scaleFactor', 'totalCost', 'suggestedSellingPrice', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'recipeId', 'recipeTitle', 'servingsProduced', 'scaleFactor', 'totalCost', 'suggestedSellingPrice', 'currencyCode', 'deductedIngredientsCount', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time;
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(logId);
       }
     }
   }

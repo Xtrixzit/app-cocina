@@ -1,10 +1,13 @@
 package com.example.data.model
 
+import androidx.annotation.Keep
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
+@Keep
 @IgnoreExtraProperties
 data class PantryItem(
     @DocumentId val id: String = "",
@@ -20,15 +23,18 @@ data class PantryItem(
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
+    @get:Exclude
     val isOutOfStock: Boolean
         get() = quantity <= 0.001
 
+    @get:Exclude
     val isLowStock: Boolean
         get() = !isOutOfStock && minQuantity > 0.0 && quantity <= minQuantity
 
     /**
      * Calculated unit price (cost per 1 unit of measurement, e.g. per gram, per unit, per ml)
      */
+    @get:Exclude
     val unitCost: Double
         get() {
             if (cost <= 0.0) return 0.0

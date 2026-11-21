@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="open_pantry_quick"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_pantry_short"
+        android:shortcutLongLabel="@string/shortcut_pantry_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.recetario.kpvxfz"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="extra_open_tab" android:value="1" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="open_shopping_quick"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_shopping_short"
+        android:shortcutLongLabel="@string/shortcut_shopping_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.recetario.kpvxfz"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="extra_open_tab" android:value="2" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="open_cooking_voice"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_cooking_voice_short"
+        android:shortcutLongLabel="@string/shortcut_cooking_voice_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.recetario.kpvxfz"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="extra_open_tab" android:value="4" />
+        </intent>
+    </shortcut>
+
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.recetario.kpvxfz"
+            android:targetClass="com.example.MainActivity">
+            <parameter
+                android:name="feature"
+                android:key="featureName" />
+        </intent>
+    </capability>
+
+    <capability android:name="actions.intent.GET_THING">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.recetario.kpvxfz"
+            android:targetClass="com.example.MainActivity">
+            <parameter
+                android:name="thing.name"
+                android:key="query" />
+        </intent>
+    </capability>
+</shortcuts>

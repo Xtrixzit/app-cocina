@@ -201,3 +201,51 @@ data class ShoppingEntity(
         }
     }
 }
+
+@Entity(tableName = "production_logs")
+data class ProductionLogEntity(
+    @PrimaryKey val id: String,
+    val recipeId: String,
+    val recipeTitle: String,
+    val targetServings: Int,
+    val scaleFactor: Double,
+    val totalCost: Double,
+    val currencyCode: String,
+    val marginPercent: Int,
+    val suggestedPrice: Double,
+    val createdAt: Long
+) {
+    fun toDomain(): com.example.data.model.ProductionLog {
+        return com.example.data.model.ProductionLog(
+            id = id,
+            recipeId = recipeId,
+            recipeTitle = recipeTitle,
+            targetServings = targetServings,
+            scaleFactor = scaleFactor,
+            totalCost = totalCost,
+            currencyCode = currencyCode,
+            marginPercent = marginPercent,
+            suggestedPrice = suggestedPrice,
+            createdAt = com.google.firebase.Timestamp(createdAt / 1000L, ((createdAt % 1000L) * 1_000_000L).toInt())
+        )
+    }
+
+    companion object {
+        fun fromDomain(log: com.example.data.model.ProductionLog): ProductionLogEntity {
+            val timestampMillis = log.createdAt?.toDate()?.time ?: System.currentTimeMillis()
+            return ProductionLogEntity(
+                id = log.id,
+                recipeId = log.recipeId,
+                recipeTitle = log.recipeTitle,
+                targetServings = log.targetServings,
+                scaleFactor = log.scaleFactor,
+                totalCost = log.totalCost,
+                currencyCode = log.currencyCode,
+                marginPercent = log.marginPercent,
+                suggestedPrice = log.suggestedPrice,
+                createdAt = timestampMillis
+            )
+        }
+    }
+}
+

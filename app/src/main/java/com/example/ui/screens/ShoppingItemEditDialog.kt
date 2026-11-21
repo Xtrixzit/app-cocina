@@ -12,6 +12,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,11 +22,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.data.model.ShoppingItem
+import com.example.ui.theme.CaveatFontFamily
+import com.example.util.LocalizedLabels
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +40,7 @@ fun ShoppingItemEditDialog(
     onDismiss: () -> Unit,
     onSave: (ShoppingItem) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(item.name) }
     var quantityText by remember {
         mutableStateOf(
@@ -49,8 +56,8 @@ fun ShoppingItemEditDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Modificar Producto e Inventario",
-                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                text = stringResource(R.string.shopping_edit_title),
+                fontFamily = CaveatFontFamily,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleLarge
             )
@@ -63,7 +70,7 @@ fun ShoppingItemEditDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nombre del producto") },
+                    label = { Text(stringResource(R.string.shopping_edit_name)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_shopping_name"),
@@ -77,7 +84,7 @@ fun ShoppingItemEditDialog(
                     OutlinedTextField(
                         value = quantityText,
                         onValueChange = { quantityText = it },
-                        label = { Text("Cantidad disponible") },
+                        label = { Text(stringResource(R.string.shopping_qty_label)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
                             .weight(1.2f)
@@ -91,12 +98,13 @@ fun ShoppingItemEditDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = unit,
-                            onValueChange = { unit = it },
-                            label = { Text("Unidad") },
+                            value = LocalizedLabels.unit(context, unit),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.recipe_form_unit_label)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .testTag("edit_shopping_unit")
                         )
                         ExposedDropdownMenu(
@@ -105,7 +113,7 @@ fun ShoppingItemEditDialog(
                         ) {
                             commonUnits.forEach { u ->
                                 DropdownMenuItem(
-                                    text = { Text(u) },
+                                    text = { Text(LocalizedLabels.unit(context, u)) },
                                     onClick = {
                                         unit = u
                                         unitExpanded = false
@@ -135,12 +143,12 @@ fun ShoppingItemEditDialog(
                 enabled = name.isNotBlank(),
                 modifier = Modifier.testTag("edit_shopping_save_button")
             ) {
-                Text("Guardar Cambios")
+                Text(stringResource(R.string.action_save_changes))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

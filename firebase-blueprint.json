@@ -1,70 +1,135 @@
 {
   "entities": {
-    "Recipe": {
-      "title": "Recipe",
-      "description": "A cooking recipe with ingredient list, preparation instructions, and cooking times.",
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Synced Google account profile and cloud sync metadata stored per authenticated user.",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier of the recipe" },
+        "userId": { "type": "string", "description": "Owner Google User ID" },
+        "email": { "type": "string", "description": "Google account email address" },
+        "displayName": { "type": "string", "description": "Google account display name" },
+        "photoUrl": { "type": "string", "description": "Optional Google profile photo URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of first sync (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of latest sync (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "email", "createdAt"]
+    },
+    "Recipe": {
+      "title": "Recipe",
+      "description": "A cooking recipe with ingredient list, preparation instructions, costs, portable image data URI or URL, and cooking times.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the recipe (document ID)" },
         "userId": { "type": "string", "description": "Owner Google User ID" },
         "title": { "type": "string", "description": "Title or name of the dish" },
-        "category": { "type": "string", "description": "Category (Desayuno, Almuerzo, Cena, Postre, Snack, etc.)" },
+        "category": { "type": "string", "description": "Category (Desayunos, Almuerzos, Cenas, Postres, Snacks, etc.)" },
         "servings": { "type": "number", "description": "Base number of servings" },
         "prepTimeMinutes": { "type": "number", "description": "Preparation time in minutes" },
         "cookTimeMinutes": { "type": "number", "description": "Cooking time in minutes" },
         "difficulty": { "type": "string", "description": "Difficulty level (Fácil, Media, Difícil)" },
         "ingredients": {
           "type": "array",
-          "description": "List of ingredient objects with name, amount, unit, category"
+          "description": "List of ingredient objects with name, amount, unit, category, manualUnitCost"
         },
         "instructions": {
           "type": "array",
           "description": "Step-by-step preparation instructions"
         },
         "notes": { "type": "string", "description": "Optional notes or chef tips" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+        "imageUrl": { "type": "string", "description": "Optional compressed data URI or photo URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update (FieldValue.serverTimestamp())" }
       },
       "required": ["userId", "title", "servings", "prepTimeMinutes", "cookTimeMinutes", "ingredients", "instructions", "createdAt"]
     },
     "PantryItem": {
       "title": "PantryItem",
-      "description": "An ingredient or provision stocked in the pantry / kitchen inventory.",
+      "description": "An ingredient or provision stocked in the pantry / kitchen inventory with purchase cost tracking.",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier of the pantry item" },
+        "id": { "type": "string", "description": "Unique identifier of the pantry item (document ID)" },
         "userId": { "type": "string", "description": "Owner Google User ID" },
         "name": { "type": "string", "description": "Name of the item or ingredient" },
         "category": { "type": "string", "description": "Category (Verduras, Carnes, Lácteos, Granos, etc.)" },
         "quantity": { "type": "number", "description": "Current quantity in stock" },
-        "unit": { "type": "string", "description": "Unit of measurement (g, kg, ml, l, u, etc.)" },
+        "unit": { "type": "string", "description": "Unit of measurement (g, kg, ml, l, unidades, etc.)" },
         "minQuantity": { "type": "number", "description": "Threshold minimum quantity before restock warning" },
-        "expirationDate": { "type": "string", "description": "Optional expiration date string YYYY-MM-DD" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+        "cost": { "type": "number", "description": "Purchase price paid for costBaseQuantity" },
+        "costBaseQuantity": { "type": "number", "description": "Quantity covered by cost" },
+        "expirationDate": { "type": "string", "description": "Optional expiration date string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update (FieldValue.serverTimestamp())" }
       },
       "required": ["userId", "name", "quantity", "unit", "createdAt"]
     },
     "ShoppingItem": {
       "title": "ShoppingItem",
-      "description": "An item to buy on the grocery shopping list.",
+      "description": "An item to buy or verify on the grocery shopping checklist.",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier of the shopping item" },
+        "id": { "type": "string", "description": "Unique identifier of the shopping item (document ID)" },
         "userId": { "type": "string", "description": "Owner Google User ID" },
         "name": { "type": "string", "description": "Name of the item to buy" },
         "category": { "type": "string", "description": "Category" },
         "quantity": { "type": "number", "description": "Quantity to buy" },
         "unit": { "type": "string", "description": "Unit of measurement" },
-        "isPurchased": { "type": "boolean", "description": "Whether the item has been marked as bought" },
+        "isPurchased": { "type": "boolean", "description": "Whether the item has been marked as bought / available" },
         "recipeSource": { "type": "string", "description": "Optional recipe name source that triggered this item" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" }
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update (FieldValue.serverTimestamp())" }
       },
       "required": ["userId", "name", "quantity", "unit", "isPurchased", "createdAt"]
+    },
+    "ProductionLog": {
+      "title": "ProductionLog",
+      "description": "Immutable audit entry recorded whenever a production batch deducts stock from pantry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique log identifier (document ID)" },
+        "userId": { "type": "string", "description": "Owner Google User ID" },
+        "recipeId": { "type": "string", "description": "Source recipe ID" },
+        "recipeTitle": { "type": "string", "description": "Recipe title at production time" },
+        "servingsProduced": { "type": "number", "description": "Portions or units produced" },
+        "scaleFactor": { "type": "number", "description": "Multiplier applied relative to recipe servings" },
+        "totalCost": { "type": "number", "description": "Total ingredient cost calculated" },
+        "suggestedSellingPrice": { "type": "number", "description": "Suggested batch selling price based on profit margin" },
+        "currencyCode": { "type": "string", "description": "Selected currency code (e.g. USD, EUR, MXN)" },
+        "deductedIngredientsCount": { "type": "number", "description": "How many pantry items were deducted" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "recipeId", "recipeTitle", "servingsProduced", "scaleFactor", "totalCost", "suggestedSellingPrice", "createdAt"]
+    },
+    "AppDistributionConfig": {
+      "title": "AppDistributionConfig",
+      "description": "Read-only distribution metadata for private APK update notifications and optional licensing.",
+      "type": "object",
+      "properties": {
+        "latestVersionCode": { "type": "number", "description": "Latest published Android versionCode" },
+        "latestVersionName": { "type": "string", "description": "Latest published versionName" },
+        "downloadUrl": { "type": "string", "description": "Private HTTPS link to latest APK release" },
+        "releaseNotes": { "type": "string", "description": "Changelog summary" },
+        "requireLicense": { "type": "boolean", "description": "Whether license activation is enforced for cloud access" },
+        "supportContact": { "type": "string", "description": "Support email or contact info" }
+      }
+    },
+    "LicenseKey": {
+      "title": "LicenseKey",
+      "description": "Single-buyer commercial license document managed by seller in Firebase Console.",
+      "type": "object",
+      "properties": {
+        "active": { "type": "boolean", "description": "Whether license is enabled" },
+        "assignedUid": { "type": "string", "description": "Firebase UID bound to this license upon activation" },
+        "assignedEmail": { "type": "string", "description": "Email bound upon activation" },
+        "activatedAt": { "type": "string", "format": "date-time", "description": "Activation timestamp" }
+      },
+      "required": ["active", "assignedUid"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Synced Google user profile document scoped by owner UID"
+    },
     "/users/{userId}/recipes/{recipeId}": {
       "schema": { "$ref": "#/entities/Recipe" },
       "description": "User recipes subcollection scoped by owner UID"
@@ -76,6 +141,18 @@
     "/users/{userId}/shopping_items/{shoppingItemId}": {
       "schema": { "$ref": "#/entities/ShoppingItem" },
       "description": "User shopping list items subcollection scoped by owner UID"
+    },
+    "/users/{userId}/production_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ProductionLog" },
+      "description": "User production history logs subcollection scoped by owner UID"
+    },
+    "/app_config/{configId}": {
+      "schema": { "$ref": "#/entities/AppDistributionConfig" },
+      "description": "Read-only distribution configuration managed from Firebase Console"
+    },
+    "/licenses/{licenseCode}": {
+      "schema": { "$ref": "#/entities/LicenseKey" },
+      "description": "Single-use license key validation and binding collection"
     }
   }
 }

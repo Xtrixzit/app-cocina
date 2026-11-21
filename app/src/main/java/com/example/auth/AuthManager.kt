@@ -17,9 +17,12 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 object AuthManager {
 
@@ -64,6 +67,8 @@ object AuthManager {
                 } else {
                     onUnauthenticated()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 onUnauthenticated()
             }
@@ -100,6 +105,8 @@ object AuthManager {
                 } else {
                     onAuthError("Unexpected credential type")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: GetCredentialCancellationException) {
                 Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
                 onAuthCancelled()
@@ -115,14 +122,16 @@ object AuthManager {
         onSignOutComplete: () -> Unit,
         scope: CoroutineScope
     ) {
-        Firebase.auth.signOut()
         scope.launch {
-            try {
-                credentialManager.clearCredentialState(ClearCredentialStateRequest())
-            } catch (e: Exception) {
-                Log.e("Auth", "Failed to clear credential state", e)
-            } finally {
-                onSignOutComplete()
+            withContext(NonCancellable) {
+                try {
+                    credentialManager.clearCredentialState(ClearCredentialStateRequest())
+                } catch (e: Exception) {
+                    Log.w("Auth", "Failed to clear credential state: ${e.message}")
+                } finally {
+                    Firebase.auth.signOut()
+                    onSignOutComplete()
+                }
             }
         }
     }

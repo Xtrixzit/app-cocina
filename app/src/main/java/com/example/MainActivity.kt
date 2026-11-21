@@ -1,7 +1,11 @@
 package com.example
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -9,49 +13,65 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.RestaurantMenu
-import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.auth.AuthManager
+import com.example.auth.SessionPreferences
+import com.example.data.model.DistributionConfig
 import com.example.data.model.Recipe
+import com.example.data.repository.CookingRepository
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
+import com.example.ui.components.CommercialSettingsDialog
+import com.example.ui.components.LicenseActivationDialog
+import com.example.ui.components.NotebookBottomBar
+import com.example.ui.components.PrivacyPolicyDialog
+import com.example.ui.components.UpdateAvailableDialog
+import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.CookingAssistantScreen
 import com.example.ui.screens.PantryFormDialog
 import com.example.ui.screens.PantryScreen
@@ -60,27 +80,137 @@ import com.example.ui.screens.RecipeDetailScreen
 import com.example.ui.screens.RecipeFormDialog
 import com.example.ui.screens.RecipesScreen
 import com.example.ui.screens.ShoppingListScreen
+import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.MyApplicationTheme
+import com.example.util.AppShortcutsUpdater
+import com.example.util.LocaleHelper
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.auth
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
-
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private var requestedTabState by mutableIntStateOf(0)
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrapContext(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Configure App Check before setContent, ViewModels or Firebase operations
-        com.example.util.configureAppCheck(this, intent)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+        )
+        requestedTabState = resolveTabFromIntent(intent)
         setContent {
-            var isDarkMode by rememberSaveable { mutableStateOf(false) }
-            MyApplicationTheme(darkTheme = isDarkMode) {
+            MyApplicationTheme {
+                AppNavigation(initialTab = requestedTabState)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        requestedTabState = resolveTabFromIntent(intent)
+    }
+
+    private fun resolveTabFromIntent(intent: Intent?): Int {
+        if (intent == null) return 0
+        if (intent.hasExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB)) {
+            return intent.getIntExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB, 0).coerceIn(0, 4)
+        }
+        val feature = intent.getStringExtra("featureName")
+            ?: intent.getStringExtra("query")
+            ?: return 0
+        val normalized = feature.lowercase()
+        return when {
+            normalized.contains("despensa") || normalized.contains("pantry") || normalized.contains("stock") -> 1
+            normalized.contains("compra") || normalized.contains("shopping") || normalized.contains("check") -> 2
+            normalized.contains("produccion") || normalized.contains("producción") || normalized.contains("production") -> 3
+            normalized.contains("voz") || normalized.contains("cocina") || normalized.contains("asistente") || normalized.contains("voice") -> 4
+            else -> 0
+        }
+    }
+}
+
+internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
+    val listener = FirebaseAuth.AuthStateListener { auth ->
+        trySend(auth.currentUser)
+    }
+    addAuthStateListener(listener)
+    awaitClose { removeAuthStateListener(listener) }
+}
+
+@Composable
+fun AppNavigation(
+    initialTab: Int = 0,
+    auth: FirebaseAuth = Firebase.auth
+) {
+    val context = LocalContext.current
+    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+    val isGuestMode by SessionPreferences.observeGuestMode(context).collectAsStateWithLifecycle()
+
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null && SessionPreferences.isGuestMode(context)) {
+            SessionPreferences.setGuestMode(context, false)
+        }
+    }
+
+    LaunchedEffect(isGuestMode) {
+        if (auth.currentUser == null && !isGuestMode) {
+            val credentialManager = CredentialManager.create(context)
+            AuthManager.attemptAutoSignIn(
+                context = context,
+                credentialManager = credentialManager,
+                onAuthSuccess = {
+                    SessionPreferences.setGuestMode(context, false)
+                },
+                onUnauthenticated = {},
+                scope = this
+            )
+        }
+    }
+
+    val user = currentUser
+    when {
+        user != null -> {
+            key(user.uid) {
                 MainFeatureScreen(
-                    isDarkMode = isDarkMode,
-                    onToggleDarkMode = { isDarkMode = !isDarkMode }
+                    currentUserId = user.uid,
+                    currentUserEmail = user.email.orEmpty(),
+                    currentUserName = user.displayName.orEmpty(),
+                    isGuestMode = false,
+                    initialTab = initialTab
                 )
             }
+        }
+        isGuestMode -> {
+            key(CookingRepository.GUEST_USER_ID) {
+                MainFeatureScreen(
+                    currentUserId = CookingRepository.GUEST_USER_ID,
+                    currentUserEmail = "",
+                    currentUserName = stringResource(R.string.guest_display_name),
+                    isGuestMode = true,
+                    initialTab = initialTab
+                )
+            }
+        }
+        else -> {
+            AuthScreen(
+                onAuthSuccess = {
+                    SessionPreferences.setGuestMode(context, false)
+                },
+                onContinueAsGuest = {
+                    SessionPreferences.setGuestMode(context, true)
+                }
+            )
         }
     }
 }
@@ -88,50 +218,76 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainFeatureScreen(
-    viewModel: MainViewModel = viewModel(),
-    isDarkMode: Boolean = false,
-    onToggleDarkMode: () -> Unit = {}
+    currentUserId: String,
+    currentUserEmail: String,
+    currentUserName: String,
+    isGuestMode: Boolean = false,
+    initialTab: Int = 0,
+    viewModel: MainViewModel = viewModel(
+        key = if (isGuestMode) CookingRepository.GUEST_USER_ID else currentUserId,
+        factory = viewModelFactory {
+            initializer {
+                val app = checkNotNull(this[APPLICATION_KEY]) {
+                    "APPLICATION_KEY missing from CreationExtras"
+                }
+                val repository = CookingRepository(app)
+                MainViewModel(
+                    repository = repository,
+                    currentUserId = currentUserId,
+                    currentUserEmail = currentUserEmail,
+                    currentUserName = currentUserName,
+                    isGuestMode = isGuestMode
+                )
+            }
+        }
+    )
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Recetas, 1: Despensa, 2: Compras, 3: Producción, 4: Asistente
-    var showAboutDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val credentialManager = remember { CredentialManager.create(context) }
 
-    // Detail and Form dialog states
+    val snackbarHostState = remember { SnackbarHostState() }
+    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showAccountDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var manualUpdateConfig by remember { mutableStateOf<DistributionConfig?>(null) }
+
+    val distributionConfig by viewModel.distributionConfig.collectAsStateWithLifecycle()
+    val licenseValidated by viewModel.licenseValidated.collectAsStateWithLifecycle()
+    val localGuestCount by viewModel.localGuestCountForMigration.collectAsStateWithLifecycle()
+
     val selectedRecipe by viewModel.selectedRecipe.collectAsState()
     val targetServings by viewModel.targetServings.collectAsState()
     var recipeFormTarget by remember { mutableStateOf<Recipe?>(null) }
     var showRecipeForm by remember { mutableStateOf(false) }
     var showPantryForm by remember { mutableStateOf(false) }
 
-    // Collect user notifications
     LaunchedEffect(Unit) {
         viewModel.userMessage.collectLatest { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
 
-    // Pantry state for cross-checking
     val pantryUiState by viewModel.pantryState.collectAsState()
     val pantryItems = when (val s = pantryUiState) {
         is UiState.Success -> s.data
         else -> emptyList()
     }
 
-    // Shopping items count for badge
     val shoppingUiState by viewModel.shoppingState.collectAsState()
     val pendingShoppingCount = when (val s = shoppingUiState) {
         is UiState.Success -> s.data.count { !it.isPurchased }
         else -> 0
     }
 
-    // Recipes state for Assistant and Production
     val recipesUiState by viewModel.recipesState.collectAsState()
     val recipesList = when (val s = recipesUiState) {
         is UiState.Success -> s.data
         else -> emptyList()
     }
 
-    // If viewing a recipe detail screen, display detail view with BackHandler
     if (selectedRecipe != null) {
         RecipeDetailScreen(
             recipe = selectedRecipe!!,
@@ -166,56 +322,92 @@ fun MainFeatureScreen(
                     title = {
                         if (selectedTab == 0) {
                             Text(
-                                "Mi Cuaderno de Recetas",
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = stringResource(R.string.topbar_recipes),
+                                fontFamily = CaveatFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 24.sp,
                                 color = MaterialTheme.colorScheme.secondary
                             )
                         } else {
                             val title = when (selectedTab) {
-                                1 -> "Mi Despensa"
-                                2 -> "Check List • Compras"
-                                3 -> "Cálculo de Producción"
-                                4 -> "Surprise Me • Asistente"
-                                else -> "Recetario"
+                                1 -> stringResource(R.string.topbar_pantry)
+                                2 -> stringResource(R.string.topbar_shopping)
+                                3 -> stringResource(R.string.topbar_production)
+                                4 -> stringResource(R.string.topbar_cooking)
+                                else -> stringResource(R.string.app_name)
                             }
                             Text(
-                                title,
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = title,
+                                fontFamily = CaveatFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 28.sp,
+                                fontSize = 26.sp,
                                 color = MaterialTheme.colorScheme.secondary
                             )
                         }
                     },
-                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,
                         titleContentColor = MaterialTheme.colorScheme.onSurface,
                         actionIconContentColor = MaterialTheme.colorScheme.onSurface
                     ),
                     actions = {
+                        if (isGuestMode) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(12.dp),
+                                onClick = { showAccountDialog = true },
+                                modifier = Modifier
+                                    .padding(end = 4.dp)
+                                    .testTag("guest_mode_badge")
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.guest_badge_short),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                         IconButton(
-                            onClick = onToggleDarkMode,
-                            modifier = Modifier.testTag("action_toggle_theme")
+                            onClick = { showSettingsDialog = true },
+                            modifier = Modifier.testTag("action_settings")
                         ) {
                             Icon(
-                                imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                contentDescription = if (isDarkMode) "Cambiar a modo claro" else "Cambiar a modo oscuro",
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.cd_settings),
                                 tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        IconButton(
+                            onClick = { showAccountDialog = true },
+                            modifier = Modifier.testTag("action_account")
+                        ) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = if (isGuestMode) {
+                                    stringResource(R.string.cd_guest_mode)
+                                } else {
+                                    stringResource(R.string.cd_cloud_account)
+                                },
+                                tint = MaterialTheme.colorScheme.secondary
                             )
                         }
                         IconButton(
                             onClick = { showAboutDialog = true },
                             modifier = Modifier.testTag("action_about")
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = "Información", tint = MaterialTheme.colorScheme.onSurface)
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = stringResource(R.string.cd_info),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 )
             },
             bottomBar = {
-                com.example.ui.components.NotebookBottomBar(
+                NotebookBottomBar(
                     selectedTab = selectedTab,
                     onTabSelected = { selectedTab = it },
                     pendingShoppingCount = pendingShoppingCount
@@ -271,39 +463,223 @@ fun MainFeatureScreen(
         }
     }
 
-    // Recipe Create/Edit Dialog
     if (showRecipeForm) {
         RecipeFormDialog(
             initialRecipe = recipeFormTarget,
             onDismiss = { showRecipeForm = false },
-            onSave = { recipe ->
-                viewModel.saveRecipe(recipe)
-            }
+            onSave = { recipe -> viewModel.saveRecipe(recipe) }
         )
     }
 
-    // Pantry Add Dialog
     if (showPantryForm) {
         PantryFormDialog(
             initialItem = null,
             onDismiss = { showPantryForm = false },
-            onSave = { item ->
-                viewModel.savePantryItem(item)
+            onSave = { item -> viewModel.savePantryItem(item) }
+        )
+    }
+
+    if (showSettingsDialog) {
+        CommercialSettingsDialog(
+            isGuestMode = isGuestMode,
+            localGuestCountForMigration = localGuestCount,
+            onDismiss = { showSettingsDialog = false },
+            onMigrateGuestToCloud = {
+                viewModel.migrateGuestDataToCloud()
+            },
+            onExportFullBackupJson = { onResult ->
+                viewModel.exportFullBackupJson(onResult)
+            },
+            onImportFullBackupJson = { jsonText, replace ->
+                viewModel.importFullBackupJson(jsonText, replace)
+            },
+            onActivateLicense = { code ->
+                viewModel.activateLicense(code)
+            },
+            onCheckUpdates = {
+                viewModel.checkUpdatesManual(
+                    currentVersionCode = BuildConfig.VERSION_CODE,
+                    currentVersionName = BuildConfig.VERSION_NAME
+                ) { cfg ->
+                    manualUpdateConfig = cfg
+                }
+            },
+            onShowPrivacyPolicy = { showPrivacyDialog = true },
+            onDeleteAccount = {
+                showSettingsDialog = false
+                viewModel.deleteAccountAndCloudData {
+                    coroutineScope.launch {
+                        if (isGuestMode) {
+                            SessionPreferences.setGuestMode(context, false)
+                        } else {
+                            AuthManager.signOut(credentialManager, {}, this)
+                        }
+                    }
+                }
             }
         )
     }
 
-    // About Dialog
+    if (showPrivacyDialog) {
+        PrivacyPolicyDialog(onDismiss = { showPrivacyDialog = false })
+    }
+
+    val forcedUpdateConfig = distributionConfig?.takeIf {
+        it.minRequiredVersionCode > BuildConfig.VERSION_CODE
+    }
+    if (forcedUpdateConfig != null) {
+        UpdateAvailableDialog(
+            config = forcedUpdateConfig,
+            isMandatory = true,
+            onDismiss = {}
+        )
+    } else if (manualUpdateConfig != null) {
+        UpdateAvailableDialog(
+            config = manualUpdateConfig!!,
+            isMandatory = false,
+            onDismiss = { manualUpdateConfig = null }
+        )
+    }
+
+    if (!isGuestMode && distributionConfig?.requireLicense == true && !licenseValidated) {
+        LicenseActivationDialog(
+            onActivate = { code -> viewModel.activateLicense(code) },
+            onSignOut = {
+                coroutineScope.launch {
+                    viewModel.prepareSignOut()
+                    AuthManager.signOut(credentialManager, {}, this)
+                }
+            }
+        )
+    }
+
+    if (showAccountDialog) {
+        if (isGuestMode) {
+            AlertDialog(
+                onDismissRequest = { showAccountDialog = false },
+                title = { Text(stringResource(R.string.account_guest_title), fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.account_guest_active),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(R.string.account_guest_desc),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAccountDialog = false
+                            coroutineScope.launch {
+                                viewModel.prepareSignOut()
+                                SessionPreferences.setGuestMode(context, false)
+                            }
+                        }
+                    ) {
+                        Text(stringResource(R.string.account_connect_google))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAccountDialog = false }) {
+                        Text(stringResource(R.string.account_keep_guest))
+                    }
+                }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showAccountDialog = false },
+                title = { Text(stringResource(R.string.account_cloud_title), fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            text = if (currentUserName.isNotBlank()) {
+                                stringResource(R.string.account_cloud_active_named, currentUserName)
+                            } else {
+                                stringResource(R.string.account_cloud_active)
+                            },
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (currentUserEmail.isNotBlank()) {
+                            Text(
+                                text = currentUserEmail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(R.string.account_cloud_desc),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAccountDialog = false
+                            viewModel.retryCloudSync()
+                        }
+                    ) {
+                        Text(stringResource(R.string.account_sync_now))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showAccountDialog = false
+                            coroutineScope.launch {
+                                viewModel.prepareSignOut()
+                                AuthManager.signOut(
+                                    credentialManager = credentialManager,
+                                    onSignOutComplete = {},
+                                    scope = this
+                                )
+                            }
+                        }
+                    ) {
+                        Text(stringResource(R.string.account_sign_out), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            )
+        }
+    }
+
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
-            title = { Text("Recetario & Despensa", fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    stringResource(R.string.about_title, BuildConfig.VERSION_NAME),
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                Text("Aplicación 100% privada y local.\nTus recetas, inventario de despensa y lista de compras se almacenan directamente en la memoria de tu dispositivo, sin necesidad de cuentas ni conexión externa.")
+                Text(
+                    if (isGuestMode) {
+                        stringResource(R.string.about_guest_desc)
+                    } else {
+                        stringResource(R.string.about_cloud_desc)
+                    }
+                )
             },
             confirmButton = {
                 TextButton(onClick = { showAboutDialog = false }) {
-                    Text("Entendido")
+                    Text(stringResource(R.string.action_understood))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAboutDialog = false
+                        showPrivacyDialog = true
+                    }
+                ) {
+                    Text(stringResource(R.string.privacy_title))
                 }
             }
         )

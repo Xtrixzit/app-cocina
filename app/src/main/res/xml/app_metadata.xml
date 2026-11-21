@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="Recetario y Despensa gestiona inventario de cocina, ingredientes, costos unitarios, listas de compras y recetas en la nube (cuenta Google) o localmente (Modo Invitado).
+    Funciones disponibles para cualquier asistente de voz o agente de IA sin abrir la aplicación:
+    - Usa 'consultarStockDespensa' cuando el usuario pregunte cuánto tiene de un ingrediente o quiera revisar su despensa.
+    - Usa 'listarStockBajoDespensa' cuando pregunte qué insumos se están agotando o necesitan reposición urgente.
+    - Usa 'verificarProduccionReceta' cuando pregunte si alcanza el inventario actual para producir una receta y su costo estimado.
+    - Usa 'consultarListaCompras' cuando pregunte qué falta por comprar o pida leer su lista de compras.
+    - Usa 'listarRecetasDisponibles' cuando pregunte qué puede cocinar hoy según su despensa actual.
+    Restricciones:
+    - Todas las consultas son de solo lectura sobre la despensa, lista de compras y recetas activas del usuario."
+    appfn:displayDescription="@string/user_visible_description" />

@@ -3,7 +3,10 @@ package com.example.data.sync
 import android.content.Context
 import android.content.Intent
 import android.util.Base64
+import com.example.R
 import com.example.data.model.PantryItem
+import com.example.util.LocaleHelper
+import com.example.util.LocalizedLabels
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -33,25 +36,28 @@ object InventorySyncManager {
     }
 
     /**
-     * Generates a beautifully formatted human-readable summary for WhatsApp or messaging.
+     * Generates a formatted human-readable summary for messaging apps.
      */
-    fun createReadableShareText(items: List<PantryItem>): String {
+    fun createReadableShareText(context: Context, items: List<PantryItem>): String {
+        val loc = LocaleHelper.localizedContext(context)
         val sb = StringBuilder()
-        sb.append("📋 *Inventario de Despensa - Recetario*\n")
-        sb.append("Actualizado: ${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}\n\n")
+        sb.append("📋 *${loc.getString(R.string.pantry_header)} - ${loc.getString(R.string.app_name)}*\n")
+        sb.append("${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}\n\n")
 
         val grouped = items.groupBy { it.category }
         for ((category, catItems) in grouped) {
-            sb.append("🔹 *${category.uppercase()}*\n")
+            val catDisp = LocalizedLabels.pantryCategory(loc, category)
+            sb.append("🔹 *${catDisp.uppercase()}*\n")
             for (item in catItems) {
                 val formattedQty = if (item.quantity % 1.0 == 0.0) item.quantity.toInt().toString() else "%.1f".format(item.quantity)
-                sb.append("  • ${item.name}: $formattedQty ${item.unit}\n")
+                val uDisp = LocalizedLabels.unit(loc, item.unit)
+                sb.append("  • ${item.name}: $formattedQty $uDisp\n")
             }
             sb.append("\n")
         }
 
         sb.append("---\n")
-        sb.append("📲 *Código para sincronizar en tu app:*\n")
+        sb.append("${loc.getString(R.string.sync_copy_token_btn)}:\n")
         sb.append(createSyncToken(items))
         return sb.toString()
     }
@@ -101,13 +107,14 @@ object InventorySyncManager {
      * Opens Android's native share sheet to send the inventory to another device or chat.
      */
     fun shareInventory(context: Context, items: List<PantryItem>) {
-        val shareText = createReadableShareText(items)
+        val loc = LocaleHelper.localizedContext(context)
+        val shareText = createReadableShareText(context, items)
         val sendIntent = Intent().apply {
             action = Intent.ACTION_SEND
             putExtra(Intent.EXTRA_TEXT, shareText)
             type = "text/plain"
         }
-        val shareIntent = Intent.createChooser(sendIntent, "Compartir inventario de despensa con otro dispositivo")
+        val shareIntent = Intent.createChooser(sendIntent, loc.getString(R.string.sync_share_pantry_btn))
         context.startActivity(shareIntent)
     }
 }

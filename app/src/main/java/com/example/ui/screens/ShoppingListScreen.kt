@@ -11,17 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,9 +30,9 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -47,21 +43,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.ShoppingItem
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
+import com.example.ui.components.PostItButton
+import com.example.ui.components.PostItFilterChip
 import com.example.ui.components.ShoppingItemCard
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
-import com.example.ui.theme.StockGreen
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
+import com.example.ui.theme.PostItMint
+import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItPink
+import com.example.ui.theme.PostItSky
+import com.example.ui.theme.PostItYellow
+import com.example.util.LocalizedLabels
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +77,7 @@ fun ShoppingListScreen(
     viewModel: MainViewModel,
     pantryItems: List<PantryItem>
 ) {
+    val context = LocalContext.current
     val shoppingUiState by viewModel.shoppingState.collectAsState()
 
     var newItemName by remember { mutableStateOf("") }
@@ -76,7 +85,7 @@ fun ShoppingListScreen(
     var newItemUnit by remember { mutableStateOf("unidades") }
     var markAsAvailable by remember { mutableStateOf(true) }
     var unitMenuExpanded by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Todos, 1 = Disponibles, 2 = Por Comprar
+    var selectedTab by remember { mutableIntStateOf(0) }
     var editingItem by remember { mutableStateOf<ShoppingItem?>(null) }
 
     val commonUnits = listOf("unidades", "kg", "g", "l", "ml", "paquetes", "latas", "piezas", "docenas")
@@ -106,7 +115,6 @@ fun ShoppingListScreen(
                 .padding(padding)
                 .notebookPaperBackground()
         ) {
-            // Sketched Box Header matching reference image: "[Check list]"
             Box(
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 6.dp)
@@ -114,15 +122,14 @@ fun ShoppingListScreen(
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "Check list • Inventario",
-                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                    text = stringResource(R.string.shopping_header),
+                    fontFamily = CaveatFontFamily,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
 
-            // Quick Add Input Card with explicit available quantity controls
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -137,14 +144,13 @@ fun ShoppingListScreen(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Product Name field
                     OutlinedTextField(
                         value = newItemName,
                         onValueChange = { newItemName = it },
                         placeholder = {
                             Text(
-                                "Nombre del producto...",
-                                fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                stringResource(R.string.shopping_name_hint),
+                                fontFamily = PatrickHandFontFamily,
                                 fontSize = 17.sp
                             )
                         },
@@ -155,7 +161,6 @@ fun ShoppingListScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
 
-                    // Available Quantity + Unit Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -164,7 +169,7 @@ fun ShoppingListScreen(
                         OutlinedTextField(
                             value = newItemQty,
                             onValueChange = { newItemQty = it },
-                            label = { Text("Cant. disponible") },
+                            label = { Text(stringResource(R.string.shopping_qty_label)) },
                             placeholder = { Text("1") },
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Decimal,
@@ -183,12 +188,13 @@ fun ShoppingListScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             OutlinedTextField(
-                                value = newItemUnit,
-                                onValueChange = { newItemUnit = it },
-                                label = { Text("Unidad") },
+                                value = LocalizedLabels.unit(context, newItemUnit),
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(stringResource(R.string.recipe_form_unit_label)) },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitMenuExpanded) },
                                 modifier = Modifier
-                                    .menuAnchor()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                     .testTag("quick_add_shopping_unit"),
                                 singleLine = true
                             )
@@ -198,7 +204,7 @@ fun ShoppingListScreen(
                             ) {
                                 commonUnits.forEach { u ->
                                     DropdownMenuItem(
-                                        text = { Text(u) },
+                                        text = { Text(LocalizedLabels.unit(context, u)) },
                                         onClick = {
                                             newItemUnit = u
                                             unitMenuExpanded = false
@@ -208,17 +214,16 @@ fun ShoppingListScreen(
                             }
                         }
 
-                        com.example.ui.components.PostItButton(
-                            text = "+ Añadir",
+                        PostItButton(
+                            text = stringResource(R.string.action_add_short),
                             onClick = onAddItem,
-                            backgroundColor = com.example.ui.theme.PostItPeach,
+                            backgroundColor = PostItPeach,
                             rotationDegrees = -1.5f,
                             fontSize = 18.sp,
                             modifier = Modifier.testTag("quick_add_shopping_button")
                         )
                     }
 
-                    // Available in inventory toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -229,8 +234,8 @@ fun ShoppingListScreen(
                             colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                         )
                         Text(
-                            text = "Disponible en inventario (se sincroniza con la Despensa)",
-                            fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                            text = stringResource(R.string.shopping_available_toggle),
+                            fontFamily = PatrickHandFontFamily,
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -260,8 +265,8 @@ fun ShoppingListScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Error al cargar la check list",
-                                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                    text = stringResource(R.string.shopping_load_error),
+                                    fontFamily = CaveatFontFamily,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.error,
@@ -270,16 +275,16 @@ fun ShoppingListScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = state.message,
-                                    fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                    fontFamily = PatrickHandFontFamily,
                                     fontSize = 16.sp,
                                     textAlign = TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
-                                com.example.ui.components.PostItButton(
-                                    text = "Restablecer y Actualizar Base de Datos",
-                                    onClick = { viewModel.resetDatabase() },
-                                    backgroundColor = com.example.ui.theme.PostItYellow,
+                                PostItButton(
+                                    text = stringResource(R.string.action_retry_sync),
+                                    onClick = { viewModel.retryCloudSync() },
+                                    backgroundColor = PostItYellow,
                                     fontSize = 18.sp,
                                     modifier = Modifier.testTag("reset_db_shopping")
                                 )
@@ -292,30 +297,29 @@ fun ShoppingListScreen(
                     val purchasedItems = allItems.filter { it.isPurchased }
                     val pendingItems = allItems.filter { !it.isPurchased }
 
-                    // Post-It Tabs: "Todos", "Disponibles", "Por Comprar"
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        com.example.ui.components.PostItFilterChip(
+                        PostItFilterChip(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            text = "Todos (${allItems.size})",
-                            selectedColor = com.example.ui.theme.PostItSky
+                            text = stringResource(R.string.shopping_tab_all, allItems.size),
+                            selectedColor = PostItSky
                         )
-                        com.example.ui.components.PostItFilterChip(
+                        PostItFilterChip(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            text = "Disponibles (${purchasedItems.size})",
-                            selectedColor = com.example.ui.theme.PostItMint
+                            text = stringResource(R.string.shopping_tab_avail, purchasedItems.size),
+                            selectedColor = PostItMint
                         )
-                        com.example.ui.components.PostItFilterChip(
+                        PostItFilterChip(
                             selected = selectedTab == 2,
                             onClick = { selectedTab = 2 },
-                            text = "Por Comprar (${pendingItems.size})",
-                            selectedColor = com.example.ui.theme.PostItYellow
+                            text = stringResource(R.string.shopping_tab_buy, pendingItems.size),
+                            selectedColor = PostItYellow
                         )
                     }
 
@@ -341,14 +345,18 @@ fun ShoppingListScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = if (selectedTab == 2) "No hay artículos por comprar" else if (selectedTab == 1) "No hay artículos disponibles en este filtro" else "¡Tu check list de inventario está vacía!",
+                                text = when (selectedTab) {
+                                    2 -> stringResource(R.string.shopping_empty_buy)
+                                    1 -> stringResource(R.string.shopping_empty_avail)
+                                    else -> stringResource(R.string.shopping_empty_all)
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Añade un producto y su cantidad disponible arriba para gestionar tu inventario.",
+                                text = stringResource(R.string.shopping_empty_tip),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -367,16 +375,16 @@ fun ShoppingListScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "${allItems.size} producto(s) en seguimiento",
-                                            fontFamily = com.example.ui.theme.PatrickHandFontFamily,
+                                            text = stringResource(R.string.shopping_tracking_count, allItems.size),
+                                            fontFamily = PatrickHandFontFamily,
                                             fontSize = 15.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        com.example.ui.components.PostItButton(
-                                            text = "Limpiar verificados",
+                                        PostItButton(
+                                            text = stringResource(R.string.shopping_clear_checked),
                                             icon = Icons.Default.DeleteSweep,
                                             onClick = { viewModel.clearPurchasedItems(purchasedItems) },
-                                            backgroundColor = com.example.ui.theme.PostItPink,
+                                            backgroundColor = PostItPink,
                                             fontSize = 16.sp,
                                             rotationDegrees = 1f,
                                             modifier = Modifier.testTag("clear_purchased_button")

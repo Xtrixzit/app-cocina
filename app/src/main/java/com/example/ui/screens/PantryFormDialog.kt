@@ -3,11 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -16,21 +12,27 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.PantryItem
+import com.example.settings.AppSettingsPreferences
+import com.example.util.LocalizedLabels
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +41,8 @@ fun PantryFormDialog(
     onDismiss: () -> Unit,
     onSave: (PantryItem) -> Unit
 ) {
+    val context = LocalContext.current
+    val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
     val isEdit = initialItem != null
 
     var name by remember { mutableStateOf(initialItem?.name ?: "") }
@@ -78,17 +82,17 @@ fun PantryFormDialog(
     val categories = listOf("Despensa", "Verduras", "Frutas", "Carnes", "Lácteos", "Granos", "Especias", "Bebidas", "Congelados")
     val units = listOf("g", "kg", "ml", "l", "unidades", "taza", "cda", "cdta", "latas", "paquetes")
 
-    // Live preview of unit cost
     val parsedCost = costText.toDoubleOrNull() ?: 0.0
     val parsedCurrentQty = quantityText.toDoubleOrNull() ?: 0.0
     val parsedCostBase = costBaseQtyText.toDoubleOrNull() ?: if (parsedCurrentQty > 0.0) parsedCurrentQty else 1.0
     val calculatedUnitCost = if (parsedCost > 0.0 && parsedCostBase > 0.0) parsedCost / parsedCostBase else 0.0
+    val displayUnit = LocalizedLabels.unit(context, unit)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (isEdit) "Editar Provisión y Costo" else "Añadir a la Despensa",
+                text = if (isEdit) stringResource(R.string.pantry_form_edit_title) else stringResource(R.string.pantry_form_new_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -101,15 +105,14 @@ fun PantryFormDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nombre del producto/ingrediente *") },
-                    placeholder = { Text("Ej. Arroz redondo, Aceite de oliva") },
+                    label = { Text(stringResource(R.string.pantry_form_name_label)) },
+                    placeholder = { Text(stringResource(R.string.pantry_form_name_hint)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("pantry_form_name"),
                     singleLine = true
                 )
 
-                // Category dropdown
                 var catExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = catExpanded,
@@ -117,13 +120,13 @@ fun PantryFormDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedTextField(
-                        value = category,
+                        value = LocalizedLabels.pantryCategory(context, category),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Categoría") },
+                        label = { Text(stringResource(R.string.recipe_form_cat_label)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                             .fillMaxWidth()
                     )
                     ExposedDropdownMenu(
@@ -132,7 +135,7 @@ fun PantryFormDialog(
                     ) {
                         categories.forEach { cat ->
                             DropdownMenuItem(
-                                text = { Text(cat) },
+                                text = { Text(LocalizedLabels.pantryCategory(context, cat)) },
                                 onClick = {
                                     category = cat
                                     catExpanded = false
@@ -142,7 +145,6 @@ fun PantryFormDialog(
                     }
                 }
 
-                // Quantity and Unit Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -150,7 +152,7 @@ fun PantryFormDialog(
                     OutlinedTextField(
                         value = quantityText,
                         onValueChange = { quantityText = it },
-                        label = { Text("Cantidad actual") },
+                        label = { Text(stringResource(R.string.pantry_form_qty_label)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
                             .weight(1.2f)
@@ -165,12 +167,12 @@ fun PantryFormDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = unit,
+                            value = displayUnit,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Unidad") },
+                            label = { Text(stringResource(R.string.recipe_form_unit_label)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
-                            modifier = Modifier.menuAnchor()
+                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                         )
                         ExposedDropdownMenu(
                             expanded = unitExpanded,
@@ -178,7 +180,7 @@ fun PantryFormDialog(
                         ) {
                             units.forEach { u ->
                                 DropdownMenuItem(
-                                    text = { Text(u) },
+                                    text = { Text(LocalizedLabels.unit(context, u)) },
                                     onClick = {
                                         unit = u
                                         unitExpanded = false
@@ -189,7 +191,6 @@ fun PantryFormDialog(
                     }
                 }
 
-                // --- COST / PRICING SECTION ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -197,8 +198,8 @@ fun PantryFormDialog(
                     OutlinedTextField(
                         value = costText,
                         onValueChange = { costText = it },
-                        label = { Text("Precio de compra ($)") },
-                        placeholder = { Text("Ej. 3.50") },
+                        label = { Text(stringResource(R.string.pantry_form_price_label, currency.symbol)) },
+                        placeholder = { Text("3.50") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
                             .weight(1.1f)
@@ -209,7 +210,7 @@ fun PantryFormDialog(
                     OutlinedTextField(
                         value = costBaseQtyText,
                         onValueChange = { costBaseQtyText = it },
-                        label = { Text("Por cantidad ($unit)") },
+                        label = { Text(stringResource(R.string.pantry_form_base_qty_label, displayUnit)) },
                         placeholder = { Text(if (quantityText.isNotBlank()) quantityText else "1000") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
@@ -221,19 +222,22 @@ fun PantryFormDialog(
 
                 if (calculatedUnitCost > 0.0) {
                     Text(
-                        text = "🏷 Costo unitario: $${"%.4f".format(calculatedUnitCost)} por $unit",
+                        text = stringResource(
+                            R.string.pantry_form_unit_cost_preview,
+                            AppSettingsPreferences.formatMoney(calculatedUnitCost, currency, forceFourDecimalsIfTiny = true),
+                            displayUnit
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                // Min Quantity threshold for alerts
                 OutlinedTextField(
                     value = minQuantityText,
                     onValueChange = { minQuantityText = it },
-                    label = { Text("Stock mínimo para alerta (opcional)") },
-                    placeholder = { Text("Ej. 100") },
+                    label = { Text(stringResource(R.string.pantry_form_min_qty_label)) },
+                    placeholder = { Text("100") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -241,12 +245,11 @@ fun PantryFormDialog(
                     singleLine = true
                 )
 
-                // Expiration date
                 OutlinedTextField(
                     value = expirationDate,
                     onValueChange = { expirationDate = it },
-                    label = { Text("Fecha de vencimiento (opcional)") },
-                    placeholder = { Text("AAAA-MM-DD") },
+                    label = { Text(stringResource(R.string.pantry_form_exp_label)) },
+                    placeholder = { Text(stringResource(R.string.pantry_form_exp_hint)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -277,12 +280,12 @@ fun PantryFormDialog(
                 enabled = name.isNotBlank(),
                 modifier = Modifier.testTag("pantry_form_save")
             ) {
-                Text("Guardar")
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

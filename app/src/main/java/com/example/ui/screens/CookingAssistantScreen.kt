@@ -19,8 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
@@ -29,23 +31,30 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.Recipe
+import com.example.settings.AppSettingsPreferences
 import com.example.ui.MainViewModel
 import com.example.ui.RecipeFeasibility
 import com.example.ui.components.CookingTimerDialog
@@ -62,6 +71,7 @@ import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
+import kotlinx.coroutines.delay
 
 @Composable
 fun CookingAssistantScreen(
@@ -70,7 +80,27 @@ fun CookingAssistantScreen(
     pantryItems: List<PantryItem>,
     onSelectRecipe: (Recipe) -> Unit
 ) {
+    val context = LocalContext.current
     var activeTimerMinutes by remember { mutableStateOf<Int?>(null) }
+    var resumePersistedTimer by remember { mutableStateOf(false) }
+
+    val persistedTimer by AppSettingsPreferences.observeTimerState(context).collectAsStateWithLifecycle()
+    var bannerRemainingSec by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(persistedTimer) {
+        if (persistedTimer.isRunning && persistedTimer.endTimeMillis > 0L) {
+            while (true) {
+                val rem = ((persistedTimer.endTimeMillis - System.currentTimeMillis() + 999L) / 1000L)
+                    .toInt()
+                    .coerceAtLeast(0)
+                bannerRemainingSec = rem
+                if (rem <= 0) break
+                delay(1000L)
+            }
+        } else {
+            bannerRemainingSec = persistedTimer.pausedRemainingSeconds.coerceAtLeast(0)
+        }
+    }
 
     val feasibilities = remember(recipes, pantryItems) {
         viewModel.calculateRecipeFeasibilities(recipes, pantryItems)
@@ -80,248 +110,375 @@ fun CookingAssistantScreen(
     val almostReady = feasibilities.filter { it.matchPercentage in 50..99 }
     val needSupplies = feasibilities.filter { it.matchPercentage < 50 }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .notebookPaperBackground(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Sketched Box Header matching reference image: "[Surprise me]"
-            item {
-                Box(
-                    modifier = Modifier
-                        .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
-                        .padding(horizontal = 14.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "Surprise me",
-                        fontFamily = CaveatFontFamily,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                }
-            }
+    val exposedTools = listOf(
+        stringResource(R.string.cook_voice_tool1_title) to stringResource(R.string.cook_voice_tool1_sample),
+        stringResource(R.string.cook_voice_tool2_title) to stringResource(R.string.cook_voice_tool2_sample),
+        stringResource(R.string.cook_voice_tool3_title) to stringResource(R.string.cook_voice_tool3_sample),
+        stringResource(R.string.cook_voice_tool4_title) to stringResource(R.string.cook_voice_tool4_sample),
+        stringResource(R.string.cook_voice_tool5_title) to stringResource(R.string.cook_voice_tool5_sample)
+    )
 
-            // Hero card: Análisis de despensa vs recetas
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .notebookPaperBackground(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Box(
+                modifier = Modifier
+                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
+                    .padding(horizontal = 14.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.cook_header),
+                    fontFamily = CaveatFontFamily,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        }
+
+        if (persistedTimer.durationSeconds > 0 && bannerRemainingSec > 0) {
             item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    ),
-                    shape = RoundedCornerShape(8.dp),
+                Surface(
+                    color = PostItYellow.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .sketchedBorder(color = MaterialTheme.colorScheme.primary)
+                        .sketchedBorder(color = MaterialTheme.colorScheme.primary, strokeWidthDp = 1.5f)
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
+                                imageVector = Icons.Default.AlarmOn,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
+                            val mins = bannerRemainingSec / 60
+                            val secs = bannerRemainingSec % 60
+                            val lbl = persistedTimer.label.ifBlank { stringResource(R.string.timer_default_title) }
                             Text(
-                                text = "¿Qué puedo cocinar hoy?",
-                                fontFamily = CaveatFontFamily,
-                                fontSize = 24.sp,
+                                text = stringResource(R.string.cook_timer_running_banner, lbl, mins, secs),
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        TextButton(
+                            onClick = {
+                                resumePersistedTimer = true
+                                activeTimerMinutes = (persistedTimer.durationSeconds / 60).coerceAtLeast(1)
+                            }
+                        ) {
+                            Text(stringResource(R.string.cook_timer_open), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Universal Background Voice & AI Agent Provider Card (NO in-app AI, NO Widget)
+        item {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = PostItSky.copy(alpha = 0.35f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .sketchedBorder(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f), strokeWidthDp = 1.8f)
+                    .testTag("voice_provider_info_card")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.RecordVoiceOver,
+                            contentDescription = stringResource(R.string.cook_voice_title),
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Analizamos tu despensa contra todas tus recetas para recomendarte qué puedes preparar ahora mismo sin salir a comprar.",
-                            fontFamily = PatrickHandFontFamily,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                            text = stringResource(R.string.cook_voice_title),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 23.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val statusLabel = if (viewModel.isGuestMode) {
+                        stringResource(R.string.cook_voice_source_guest, pantryItems.size, recipes.size)
+                    } else {
+                        val accountLabel = viewModel.currentUserEmail
+                            .ifBlank { viewModel.currentUserName }
+                            .ifBlank { stringResource(R.string.account_cloud_active) }
+                        stringResource(R.string.cook_voice_source_cloud, accountLabel, pantryItems.size, recipes.size)
+                    }
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = statusLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = stringResource(R.string.cook_voice_desc),
+                        fontFamily = PatrickHandFontFamily,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    exposedTools.forEach { (toolLabel, sampleVoice) ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                                Text(
+                                    text = toolLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    text = stringResource(R.string.cook_voice_try, sampleVoice),
+                                    fontFamily = PatrickHandFontFamily,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Default.LockOpen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.cook_voice_compat),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+        }
 
-            // Quick Timer Section with Post-It buttons
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.sketchedBorder(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Timer,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Temporizador de Cocina",
-                                    fontFamily = CaveatFontFamily,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+        // Quick Timer Section with Post-It buttons
+        item {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.sketchedBorder(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.cook_timer_section),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val timerColors = listOf(
-                                PostItYellow,
-                                PostItPeach,
-                                PostItMint,
-                                PostItSky,
-                                PostItPink,
-                                PostItYellow
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val timerColors = listOf(
+                            PostItYellow,
+                            PostItPeach,
+                            PostItMint,
+                            PostItSky,
+                            PostItPink,
+                            PostItYellow
+                        )
+                        listOf(3, 5, 10, 15, 20, 30).forEachIndexed { idx, mins ->
+                            PostItButton(
+                                text = "${mins}m",
+                                onClick = {
+                                    resumePersistedTimer = false
+                                    activeTimerMinutes = mins
+                                },
+                                backgroundColor = timerColors[idx % timerColors.size],
+                                fontSize = 17.sp,
+                                rotationDegrees = if (idx % 2 == 0) -1f else 1f,
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                modifier = Modifier.weight(1f)
                             )
-                            listOf(3, 5, 10, 15, 20, 30).forEachIndexed { idx, mins ->
-                                PostItButton(
-                                    text = "${mins}m",
-                                    onClick = { activeTimerMinutes = mins },
-                                    backgroundColor = timerColors[idx % timerColors.size],
-                                    fontSize = 17.sp,
-                                    rotationDegrees = if (idx % 2 == 0) -1f else 1f,
-                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
                         }
                     }
                 }
             }
+        }
 
-            // Category 1: 100% Ready to cook
+        // Category 1: 100% Ready to cook
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StockGreen, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.cook_ready_title, readyToCook.size),
+                    fontFamily = CaveatFontFamily,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+        }
+
+        if (readyToCook.isEmpty()) {
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StockGreen, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Listas para cocinar (${readyToCook.size})",
-                        fontFamily = CaveatFontFamily,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.cook_ready_empty),
+                    fontFamily = PatrickHandFontFamily,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-
-            if (readyToCook.isEmpty()) {
-                item {
-                    Text(
-                        text = "No tienes recetas completas al 100% con tu despensa actual. Revisa las opciones casi listas a continuación.",
-                        fontFamily = PatrickHandFontFamily,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                items(readyToCook) { item ->
-                    FeasibilityRecipeCard(
-                        feasibility = item,
-                        onClick = { onSelectRecipe(item.recipe) },
-                        onAddMissingToShopping = {}
-                    )
-                }
+        } else {
+            items(readyToCook) { item ->
+                FeasibilityRecipeCard(
+                    feasibility = item,
+                    onClick = { onSelectRecipe(item.recipe) },
+                    onAddMissingToShopping = {}
+                )
             }
+        }
 
-            // Category 2: Almost ready (50% - 99%)
+        // Category 2: Almost ready (50% - 99%)
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = StockYellow, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.cook_almost_title, almostReady.size),
+                    fontFamily = CaveatFontFamily,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+        }
+
+        if (almostReady.isEmpty()) {
+            item {
+                Text(
+                    text = stringResource(R.string.cook_almost_empty),
+                    fontFamily = PatrickHandFontFamily,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(almostReady) { item ->
+                FeasibilityRecipeCard(
+                    feasibility = item,
+                    onClick = { onSelectRecipe(item.recipe) },
+                    onAddMissingToShopping = {
+                        viewModel.addMissingRecipeIngredientsToShoppingList(
+                            item.recipe,
+                            item.recipe.servings,
+                            pantryItems
+                        )
+                    }
+                )
+            }
+        }
+
+        // Category 3: Need more supplies (< 50%)
+        if (needSupplies.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = StockYellow, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Casi listas (${almostReady.size})",
-                        fontFamily = CaveatFontFamily,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.cook_need_title, needSupplies.size),
+                    fontFamily = CaveatFontFamily,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
             }
 
-            if (almostReady.isEmpty()) {
-                item {
-                    Text(
-                        text = "No hay recetas en esta categoría.",
-                        fontFamily = PatrickHandFontFamily,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                items(almostReady) { item ->
-                    FeasibilityRecipeCard(
-                        feasibility = item,
-                        onClick = { onSelectRecipe(item.recipe) },
-                        onAddMissingToShopping = {
-                            viewModel.addMissingRecipeIngredientsToShoppingList(
-                                item.recipe,
-                                item.recipe.servings,
-                                pantryItems
-                            )
-                        }
-                    )
-                }
+            items(needSupplies) { item ->
+                FeasibilityRecipeCard(
+                    feasibility = item,
+                    onClick = { onSelectRecipe(item.recipe) },
+                    onAddMissingToShopping = {
+                        viewModel.addMissingRecipeIngredientsToShoppingList(
+                            item.recipe,
+                            item.recipe.servings,
+                            pantryItems
+                        )
+                    }
+                )
             }
+        }
 
-            // Category 3: Need more supplies (< 50%)
-            if (needSupplies.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Requieren más ingredientes (${needSupplies.size})",
-                        fontFamily = CaveatFontFamily,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-
-                items(needSupplies) { item ->
-                    FeasibilityRecipeCard(
-                        feasibility = item,
-                        onClick = { onSelectRecipe(item.recipe) },
-                        onAddMissingToShopping = {
-                            viewModel.addMissingRecipeIngredientsToShoppingList(
-                                item.recipe,
-                                item.recipe.servings,
-                                pantryItems
-                            )
-                        }
-                    )
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(60.dp))
-            }
+        item {
+            Spacer(modifier = Modifier.height(60.dp))
         }
     }
 
     if (activeTimerMinutes != null) {
+        val defaultTitle = if (resumePersistedTimer && persistedTimer.label.isNotBlank()) {
+            persistedTimer.label
+        } else {
+            stringResource(R.string.timer_title_mins, activeTimerMinutes ?: 5)
+        }
         CookingTimerDialog(
             initialMinutes = activeTimerMinutes ?: 5,
-            timerTitle = "Temporizador (${activeTimerMinutes} min)",
+            timerTitle = defaultTitle,
+            resumeExisting = resumePersistedTimer,
             onDismiss = { activeTimerMinutes = null }
         )
     }
@@ -368,7 +525,7 @@ private fun FeasibilityRecipeCard(
                     color = barColor.copy(alpha = 0.15f)
                 ) {
                     Text(
-                        text = "$pct% despensa",
+                        text = stringResource(R.string.cook_pct_badge, pct),
                         style = MaterialTheme.typography.labelSmall,
                         color = barColor,
                         fontWeight = FontWeight.Bold,
@@ -403,7 +560,12 @@ private fun FeasibilityRecipeCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${feasibility.availableCount} de ${feasibility.totalCount} ingredientes listos • ${recipe.totalTimeMinutes} min",
+                    text = stringResource(
+                        R.string.cook_card_sub,
+                        feasibility.availableCount,
+                        feasibility.totalCount,
+                        recipe.totalTimeMinutes
+                    ),
                     fontFamily = PatrickHandFontFamily,
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -411,11 +573,11 @@ private fun FeasibilityRecipeCard(
 
                 if (feasibility.missingIngredients.isNotEmpty()) {
                     PostItButton(
-                        text = "Comprar (${feasibility.missingIngredients.size})",
+                        text = stringResource(R.string.cook_buy_btn, feasibility.missingIngredients.size),
                         icon = Icons.Default.ShoppingCart,
                         onClick = onAddMissingToShopping,
                         backgroundColor = PostItMint,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         rotationDegrees = -1f,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier.testTag("buy_missing_${recipe.id}")
@@ -426,7 +588,10 @@ private fun FeasibilityRecipeCard(
             if (feasibility.missingIngredients.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Te falta: ${feasibility.missingIngredients.joinToString(", ") { it.first }}",
+                    text = stringResource(
+                        R.string.cook_missing_line,
+                        feasibility.missingIngredients.joinToString(", ") { it.first }
+                    ),
                     fontFamily = PatrickHandFontFamily,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.error

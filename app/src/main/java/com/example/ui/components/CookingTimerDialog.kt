@@ -1,11 +1,10 @@
 package com.example.ui.components
 
-import android.content.Context
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,15 +21,10 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,31 +36,103 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
+import com.example.settings.AppSettingsPreferences
+import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.PatrickHandFontFamily
+import com.example.ui.theme.PostItMint
+import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItYellow
+import com.example.util.TimerAlertManager
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 @Composable
 fun CookingTimerDialog(
     initialMinutes: Int,
     timerTitle: String,
+    resumeExisting: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val totalSeconds = remember(initialMinutes) { (initialMinutes * 60).coerceAtLeast(60) }
-    var secondsLeft by remember { mutableIntStateOf(totalSeconds) }
-    var isRunning by remember { mutableStateOf(true) }
+    val persisted by AppSettingsPreferences.observeTimerState(context).collectAsStateWithLifecycle()
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
+
+    val requestedDurationSec = remember(initialMinutes) { (initialMinutes * 60).coerceAtLeast(60) }
+    var totalSeconds by remember {
+        mutableIntStateOf(
+            if (resumeExisting && persisted.durationSeconds > 0) persisted.durationSeconds else requestedDurationSec
+        )
+    }
+    var secondsLeft by remember {
+        mutableIntStateOf(
+            if (resumeExisting && persisted.durationSeconds > 0) {
+                if (persisted.isRunning) {
+                    ((persisted.endTimeMillis - System.currentTimeMillis()) / 1000L).toInt().coerceAtLeast(0)
+                } else {
+                    persisted.pausedRemainingSeconds.coerceAtLeast(0)
+                }
+            } else {
+                requestedDurationSec
+            }
+        )
+    }
+    var isRunning by remember {
+        mutableStateOf(if (resumeExisting && persisted.durationSeconds > 0) persisted.isRunning else true)
+    }
     var isFinished by remember { mutableStateOf(false) }
 
-    LaunchedEffect(isRunning, secondsLeft) {
-        if (isRunning && secondsLeft > 0) {
-            delay(1000L)
-            secondsLeft -= 1
-            if (secondsLeft == 0) {
-                isRunning = false
-                isFinished = true
-                triggerVibration(context)
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (!resumeExisting) {
+            TimerAlertManager.startOrResumeTimer(
+                context = context,
+                durationSeconds = requestedDurationSec,
+                remainingSeconds = requestedDurationSec,
+                label = timerTitle
+            )
+        }
+    }
+
+    LaunchedEffect(isRunning, persisted.endTimeMillis) {
+        if (isRunning) {
+            while (isRunning) {
+                val targetEnd = AppSettingsPreferences.getTimerState(context).endTimeMillis
+                val rem = if (targetEnd > 0L) {
+                    ((targetEnd - System.currentTimeMillis() + 999L) / 1000L).toInt().coerceAtLeast(0)
+                } else {
+                    secondsLeft
+                }
+                secondsLeft = rem
+                if (rem <= 0) {
+                    isRunning = false
+                    isFinished = true
+                    TimerAlertManager.triggerVibration(context)
+                    TimerAlertManager.postFinishedNotification(context, timerTitle)
+                    AppSettingsPreferences.saveTimerState(
+                        context,
+                        persisted.copy(isRunning = false, pausedRemainingSeconds = 0, endTimeMillis = 0L)
+                    )
+                    break
+                }
+                delay(500L)
             }
         }
     }
@@ -86,8 +152,8 @@ fun CookingTimerDialog(
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 Text(
-                    timerTitle,
-                    fontFamily = com.example.ui.theme.CaveatFontFamily,
+                    text = timerTitle,
+                    fontFamily = CaveatFontFamily,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.secondary
@@ -114,25 +180,25 @@ fun CookingTimerDialog(
                     )
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = String.format("%02d:%02d", minutes, seconds),
-                            fontFamily = com.example.ui.theme.CaveatFontFamily,
+                            text = String.format(Locale.US, "%02d:%02d", minutes, seconds),
+                            fontFamily = CaveatFontFamily,
                             fontSize = 46.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         if (isFinished) {
                             Text(
-                                "¡Tiempo cumplido!",
-                                fontFamily = com.example.ui.theme.CaveatFontFamily,
+                                text = stringResource(R.string.timer_done),
+                                fontFamily = CaveatFontFamily,
                                 fontSize = 22.sp,
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
                         } else {
                             Text(
-                                if (isRunning) "Cocinando..." else "En pausa",
-                                fontFamily = com.example.ui.theme.PatrickHandFontFamily,
-                                fontSize = 17.sp,
+                                text = if (isRunning) stringResource(R.string.timer_cooking) else stringResource(R.string.timer_paused),
+                                fontFamily = PatrickHandFontFamily,
+                                fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -146,54 +212,50 @@ fun CookingTimerDialog(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     if (!isFinished) {
-                        com.example.ui.components.PostItButton(
-                            text = if (isRunning) "Pausar" else "Continuar",
+                        PostItButton(
+                            text = if (isRunning) stringResource(R.string.timer_pause) else stringResource(R.string.timer_resume),
                             icon = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            onClick = { isRunning = !isRunning },
-                            backgroundColor = com.example.ui.theme.PostItYellow,
-                            fontSize = 18.sp,
+                            onClick = {
+                                if (isRunning) {
+                                    isRunning = false
+                                    TimerAlertManager.pauseTimer(context, secondsLeft)
+                                } else {
+                                    val resumeFrom = if (secondsLeft > 0) secondsLeft else totalSeconds
+                                    isRunning = true
+                                    TimerAlertManager.startOrResumeTimer(context, totalSeconds, resumeFrom, timerTitle)
+                                }
+                            },
+                            backgroundColor = PostItYellow,
+                            fontSize = 17.sp,
                             modifier = Modifier.testTag("timer_toggle_button")
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                     }
 
-                    com.example.ui.components.PostItButton(
-                        text = "Reiniciar",
+                    PostItButton(
+                        text = stringResource(R.string.timer_reset),
                         icon = Icons.Default.Refresh,
                         onClick = {
                             secondsLeft = totalSeconds
                             isRunning = false
                             isFinished = false
+                            TimerAlertManager.cancelTimer(context)
                         },
-                        backgroundColor = com.example.ui.theme.PostItPeach,
-                        fontSize = 18.sp,
+                        backgroundColor = PostItPeach,
+                        fontSize = 17.sp,
                         modifier = Modifier.testTag("timer_reset_button")
                     )
                 }
             }
         },
         confirmButton = {
-            com.example.ui.components.PostItButton(
-                text = "Cerrar",
+            PostItButton(
+                text = stringResource(R.string.action_close),
                 onClick = onDismiss,
-                backgroundColor = com.example.ui.theme.PostItMint,
-                fontSize = 18.sp,
+                backgroundColor = PostItMint,
+                fontSize = 17.sp,
                 modifier = Modifier.testTag("timer_close_button")
             )
         }
     )
-}
-
-private fun triggerVibration(context: Context) {
-    try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            val vibrator = vibratorManager?.defaultVibrator
-            vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 400, 200, 400, 200, 600), -1))
-        } else {
-            @Suppress("DEPRECATION")
-            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            vibrator?.vibrate(longArrayOf(0, 400, 200, 400, 200, 600), -1)
-        }
-    } catch (_: Exception) {}
 }
