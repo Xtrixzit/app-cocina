@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de Privacidad — Recetario</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fffaf5;
+      --card: #ffffff;
+      --text: #1f1b16;
+      --muted: #665d55;
+      --accent: #e65100;
+      --border: #eadfd5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171310;
+        --card: #221c18;
+        --text: #f5efe9;
+        --muted: #b7aba1;
+        --accent: #ff8a50;
+        --border: #3a3029;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px 16px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+    }
+    .lang-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .lang-btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .lang-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    h1 { margin-top: 0; color: var(--accent); }
+    h2 { margin-top: 24px; font-size: 1.15rem; }
+    .muted { color: var(--muted); font-size: 0.92rem; }
+    [data-lang] { display: none; }
+    [data-lang].active { display: block; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <div class="lang-bar">
+      <button class="lang-btn active" onclick="setLang('es', this)">Español</button>
+      <button class="lang-btn" onclick="setLang('en', this)">English</button>
+      <button class="lang-btn" onclick="setLang('pt', this)">Português</button>
+      <button class="lang-btn" onclick="setLang('fr', this)">Français</button>
+    </div>
+
+    <section data-lang="es" class="active">
+      <h1>Política de Privacidad — Recetario</h1>
+      <p class="muted">Última actualización: 2026 • ID de paquete: com.aistudio.recetario.kpvxfz</p>
+      <h2>1. Datos y almacenamiento</h2>
+      <ul>
+        <li><strong>Modo Invitado (Local):</strong> Toda tu información (recetas, despensa, lista de compras, fotos, costos e historial de producción) se guarda únicamente en la base de datos local de tu dispositivo. No se envía a ningún servidor externo.</li>
+        <li><strong>Cuenta de Google (Opcional):</strong> Si eliges iniciar sesión con Google, utilizamos tu identificador de usuario, nombre y correo únicamente para autenticar y aislar tus datos privados en Google Cloud Firestore. Ningún otro usuario puede ver o modificar tu información.</li>
+      </ul>
+      <h2>2. Permisos y asistentes de voz</h2>
+      <ul>
+        <li>Las fotos de recetas se seleccionan mediante el selector nativo de Android sin solicitar permisos amplios de almacenamiento.</li>
+        <li>Las notificaciones se usan únicamente para avisos de temporizadores de cocina configurados por el usuario.</li>
+        <li>Las integraciones con el asistente de voz del sistema (Android AppFunctions / App Actions) solo exponen resúmenes de inventario, recetas y compras cuando el usuario las consulta.</li>
+      </ul>
+      <h2>3. Venta de datos y eliminación</h2>
+      <p>No vendemos ni compartimos tus datos personales con terceros ni incluimos redes publicitarias. Puedes exportar todo tu respaldo en formato JSON o eliminar permanentemente tu cuenta y todos tus datos desde <strong>Configuración → Eliminar cuenta y todos mis datos</strong>.</p>
+      <h2>4. Contacto de soporte</h2>
+      <p>Si tienes dudas sobre privacidad o eliminación de datos, escribe a: <strong>soporte@tu-dominio.com</strong> (reemplaza este correo antes de publicar).</p>
+    </section>
+
+    <section data-lang="en">
+      <h1>Privacy Policy — Recetario</h1>
+      <p class="muted">Last updated: 2026 • Package ID: com.aistudio.recetario.kpvxfz</p>
+      <h2>1. Data &amp; Storage</h2>
+      <ul>
+        <li><strong>Guest Mode (Local-only):</strong> All data (recipes, pantry, shopping list, photos, costs, and production history) stays strictly on your device's local storage. Nothing is uploaded to the cloud.</li>
+        <li><strong>Google Account (Optional):</strong> If you sign in with Google, your user ID, name, and email are used solely to authenticate and isolate your private data in Google Cloud Firestore. No other user can access your data.</li>
+      </ul>
+      <h2>2. Permissions &amp; Voice Assistants</h2>
+      <ul>
+        <li>Recipe photos are picked via the Android Photo Picker without broad storage permissions.</li>
+        <li>Notifications are used strictly for user-initiated kitchen timers.</li>
+        <li>System voice assistant integrations (Android AppFunctions / App Actions) only share summaries of your recipes, pantry, and shopping list when queried on your device.</li>
+      </ul>
+      <h2>3. Data Sharing &amp; Deletion</h2>
+      <p>We do not sell personal data or run third-party ad networks. You can export a full JSON backup or permanently delete your account and cloud data anytime under <strong>Settings → Delete account &amp; all my data</strong>.</p>
+      <h2>4. Support Contact</h2>
+      <p>For privacy or data deletion inquiries, contact: <strong>support@your-domain.com</strong> (replace this email before publishing).</p>
+    </section>
+
+    <section data-lang="pt">
+      <h1>Política de Privacidade — Recetario</h1>
+      <p class="muted">Última atualização: 2026 • Pacote: com.aistudio.recetario.kpvxfz</p>
+      <h2>1. Dados e armazenamento</h2>
+      <ul>
+        <li><strong>Modo Convidado (Local):</strong> Todos os seus dados (receitas, despensa, lista de compras, fotos, custos e histórico de produção) permanecem exclusivamente no armazenamento local do aparelho.</li>
+        <li><strong>Conta Google (Opcional):</strong> Se você optar por entrar com o Google, usamos seu ID, nome e e-mail apenas para autenticar e isolar seus dados privados no Google Cloud Firestore.</li>
+      </ul>
+      <h2>2. Permissões e assistentes de voz</h2>
+      <ul>
+        <li>As fotos são selecionadas via seletor nativo do Android sem permissões amplas de armazenamento.</li>
+        <li>Notificações são usadas apenas para temporizadores iniciados pelo usuário.</li>
+        <li>A integração com assistentes de voz (Android AppFunctions / App Actions) expõe apenas resumos de estoque, receitas e compras quando consultada.</li>
+      </ul>
+      <h2>3. Exclusão de dados</h2>
+      <p>Não vendemos seus dados nem exibimos anúncios de terceiros. Você pode exportar tudo em JSON ou excluir permanentemente sua conta em <strong>Configurações → Excluir conta e todos os dados</strong>.</p>
+      <h2>4. Contato</h2>
+      <p>Dúvidas de privacidade: <strong>suporte@seu-dominio.com</strong> (substitua este e-mail antes de publicar).</p>
+    </section>
+
+    <section data-lang="fr">
+      <h1>Politique de Confidentialité — Recetario</h1>
+      <p class="muted">Dernière mise à jour : 2026 • ID du package : com.aistudio.recetario.kpvxfz</p>
+      <h2>1. Données et stockage</h2>
+      <ul>
+        <li><strong>Mode Invité (Local uniquement) :</strong> Toutes vos données (recettes, garde-manger, liste de courses, photos, coûts et historique de production) restent strictement sur l'appareil.</li>
+        <li><strong>Compte Google (Optionnel) :</strong> Si vous vous connectez avec Google, votre identifiant, nom et e-mail servent uniquement à authentifier et isoler vos données privées dans Google Cloud Firestore.</li>
+      </ul>
+      <h2>2. Permissions et assistants vocaux</h2>
+      <ul>
+        <li>Les photos utilisent le sélecteur Android natif sans accès large au stockage.</li>
+        <li>Les notifications concernent uniquement les minuteurs de cuisine lancés par l'utilisateur.</li>
+        <li>Les intégrations d'assistants vocaux (Android AppFunctions / App Actions) fournissent uniquement des résumés sur demande.</li>
+      </ul>
+      <h2>3. Suppression des données</h2>
+      <p>Nous ne revendons aucune donnée et n'utilisons aucune régie publicitaire. Vous pouvez exporter une sauvegarde JSON ou supprimer définitivement votre compte dans <strong>Paramètres → Supprimer mon compte et mes données</strong>.</p>
+      <h2>4. Contact</h2>
+      <p>Questions de confidentialité : <strong>support@votre-domaine.com</strong> (remplacez cette adresse avant publication).</p>
+    </section>
+  </main>
+
+  <script>
+    function setLang(lang, btn) {
+      document.querySelectorAll('[data-lang]').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-lang') === lang);
+      });
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>

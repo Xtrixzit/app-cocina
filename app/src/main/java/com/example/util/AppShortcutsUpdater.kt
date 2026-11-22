@@ -60,10 +60,17 @@ object AppShortcutsUpdater {
         val cookingVoiceIntent = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             putExtra(EXTRA_OPEN_TAB, 4)
+            putExtra(com.example.ai.VoiceCommandRouter.EXTRA_VOICE_LISTEN, true)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 
         val shortcuts = mutableListOf(
+            ShortcutInfoCompat.Builder(context, "shortcut_ask_voice")
+                .setShortLabel(loc.getString(R.string.shortcut_voice_ask_short))
+                .setLongLabel(loc.getString(R.string.shortcut_voice_ask_long))
+                .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+                .setIntent(cookingVoiceIntent)
+                .build(),
             ShortcutInfoCompat.Builder(context, "shortcut_pantry_status")
                 .setShortLabel(loc.getString(R.string.shortcut_dyn_pantry_short))
                 .setLongLabel(loc.getString(R.string.shortcut_dyn_pantry_long, summarySubtitle))
@@ -80,7 +87,13 @@ object AppShortcutsUpdater {
                 .setShortLabel(loc.getString(R.string.shortcut_dyn_voice_short))
                 .setLongLabel(loc.getString(R.string.shortcut_dyn_voice_long))
                 .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
-                .setIntent(cookingVoiceIntent)
+                .setIntent(
+                    Intent(context, MainActivity::class.java).apply {
+                        action = Intent.ACTION_VIEW
+                        putExtra(EXTRA_OPEN_TAB, 4)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                )
                 .build()
         )
 

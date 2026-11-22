@@ -29,6 +29,21 @@
     </shortcut>
 
     <shortcut
+        android:shortcutId="ask_voice_quick"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_voice_ask_short"
+        android:shortcutLongLabel="@string/shortcut_voice_ask_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aistudio.recetario.kpvxfz"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="extra_open_tab" android:value="4" />
+            <extra android:name="extra_voice_listen" android:value="true" />
+        </intent>
+    </shortcut>
+
+    <shortcut
         android:shortcutId="open_cooking_voice"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"

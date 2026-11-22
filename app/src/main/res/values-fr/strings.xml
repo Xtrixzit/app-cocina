@@ -7,6 +7,8 @@
     <string name="shortcut_shopping_long">Voir la liste de courses</string>
     <string name="shortcut_cooking_voice_short">Cuisine &amp; Voix</string>
     <string name="shortcut_cooking_voice_long">Minuteur, faisabilité et commandes vocales</string>
+    <string name="shortcut_voice_ask_short">Question vocale</string>
+    <string name="shortcut_voice_ask_long">Consulter le stock ou recettes à la voix</string>
 
     <!-- Navigation & TopBar -->
     <string name="tab_recipes">Recettes</string>
@@ -372,8 +374,8 @@
     <string name="cook_voice_source_guest">Source active : Mode Invité • Local (%1$d articles, %2$d recettes)</string>
     <string name="cook_voice_source_cloud">Source active : %1$s (%2$d articles, %3$d recettes)</string>
     <string name="cook_voice_desc">Cette app n\'exécute aucune IA interne. Elle expose votre stock, liste de courses et recettes via Android AppFunctions et App Actions pour tout assistant vocal compatible sans ouvrir l\'app.</string>
-    <string name="cook_voice_try">Essayez de dire : %1$s</string>
-    <string name="cook_voice_compat">Compatibilité Android : pour répondre écran verrouillé, votre appareil et assistant doivent supporter AppFunctions avec les réponses sur écran de verrouillage activées.</string>
+    <string name="cook_voice_try">Appuyez pour tester : %1$s</string>
+    <string name="cook_voice_compat">Ce n\'est pas un problème de Drive ou de cloud : vos données sont déjà stockées localement ou sur Firestore. AppFunctions en arrière-plan nécessite Android 16+ et l\'accès anticipé Google ; sur tout Android (7-16), dites \"Ok Google, cherche œufs dans Recetario\", utilisez recetario://voice dans Bixby Routines, maintenez l\'icône (\"Question vocale\") ou touchez une commande ci-dessus.</string>
     <string name="cook_voice_tool1_title">Stock (consultarStockDespensa)</string>
     <string name="cook_voice_tool1_sample">\"Combien d\'œufs ai-je dans Recetario ?\"</string>
     <string name="cook_voice_tool2_title">Alertes de stock (listarStockBajoDespensa)</string>
@@ -384,6 +386,17 @@
     <string name="cook_voice_tool4_sample">\"Qu\'y a-t-il sur ma liste de courses Recetario ?\"</string>
     <string name="cook_voice_tool5_title">Faisabilité &amp; coût (verificarProduccionReceta)</string>
     <string name="cook_voice_tool5_sample">\"Ai-je assez pour 8 portions de Tortilla dans Recetario ?\"</string>
+    <string name="voice_ask_btn">Demander à la voix</string>
+    <string name="voice_manual_hint">Tapez ou dictez : ex. \"œufs\", \"stock bas\", \"que cuisiner\"...</string>
+    <string name="voice_manual_send">Consulter</string>
+    <string name="voice_prompt_speech">Posez une question sur votre stock, vos courses ou recettes</string>
+    <string name="voice_answer_title">Réponse vocale</string>
+    <string name="voice_answer_query_prefix">Requête : %1$s</string>
+    <string name="voice_replay_btn">Écouter</string>
+    <string name="voice_stop_btn">Arrêter</string>
+    <string name="voice_no_recognizer_msg">Aucun moteur de reconnaissance vocale détecté sur cet appareil. Utilisez les exemples ou saisissez votre question.</string>
+    <string name="voice_error_generic">Impossible de traiter la commande vocale.</string>
+    <string name="voice_loading_answer">Consultation du garde-manger et des recettes...</string>
 
     <string name="cook_timer_section">Minuteur de Cuisine</string>
     <string name="cook_timer_running_banner">Minuteur actif : %1$s (%2$02d:%3$02d)</string>

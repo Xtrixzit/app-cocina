@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -18,28 +24,41 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,10 +67,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.VoiceLaunchRequest
+import com.example.ai.VoiceCommandRouter
+import com.example.ai.VoiceSpeechPlayer
 import com.example.data.model.PantryItem
 import com.example.data.model.Recipe
 import com.example.settings.AppSettingsPreferences
@@ -71,18 +94,102 @@ import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
+import com.example.util.LocaleHelper
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun CookingAssistantScreen(
     viewModel: MainViewModel,
     recipes: List<Recipe>,
     pantryItems: List<PantryItem>,
-    onSelectRecipe: (Recipe) -> Unit
+    onSelectRecipe: (Recipe) -> Unit,
+    voiceLaunchRequest: VoiceLaunchRequest = VoiceLaunchRequest(),
+    onConsumeVoiceLaunch: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var activeTimerMinutes by remember { mutableStateOf<Int?>(null) }
     var resumePersistedTimer by remember { mutableStateOf(false) }
+
+    val speechPlayer = remember { VoiceSpeechPlayer(context) }
+    DisposableEffect(Unit) {
+        onDispose { speechPlayer.release() }
+    }
+    val isSpeaking by speechPlayer.isSpeaking.collectAsStateWithLifecycle()
+
+    var manualQueryInput by remember { mutableStateOf("") }
+    var isExecutingVoice by remember { mutableStateOf(false) }
+    var voiceResult by remember { mutableStateOf<VoiceCommandRouter.VoiceExecutionResult?>(null) }
+    var recognizerError by remember { mutableStateOf<String?>(null) }
+
+    fun executeVoiceCommand(rawQuery: String, speakAloud: Boolean = true) {
+        val cleaned = rawQuery.trim()
+        if (cleaned.isBlank()) return
+        manualQueryInput = cleaned
+        recognizerError = null
+        isExecutingVoice = true
+        coroutineScope.launch {
+            val result = VoiceCommandRouter.executeVoiceQuery(context, cleaned)
+            voiceResult = result
+            isExecutingVoice = false
+            if (speakAloud && result.summaryText.isNotBlank()) {
+                speechPlayer.speak(result.summaryText)
+            }
+        }
+    }
+
+    val noRecognizerMsg = stringResource(R.string.voice_no_recognizer_msg)
+    val speechPrompt = stringResource(R.string.voice_prompt_speech)
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { res ->
+        if (res.resultCode == Activity.RESULT_OK) {
+            val spokenList = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val bestMatch = spokenList?.firstOrNull()?.trim().orEmpty()
+            if (bestMatch.isNotBlank()) {
+                executeVoiceCommand(bestMatch, speakAloud = true)
+            }
+        }
+    }
+
+    fun launchSpeechRecognizer() {
+        recognizerError = null
+        val langTag = when (AppSettingsPreferences.getLanguageCode(context)) {
+            "es" -> "es-ES"
+            "en" -> "en-US"
+            "pt" -> "pt-BR"
+            "fr" -> "fr-FR"
+            else -> java.util.Locale.getDefault().toLanguageTag()
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, speechPrompt)
+        }
+        try {
+            speechLauncher.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            recognizerError = noRecognizerMsg
+        } catch (_: Exception) {
+            recognizerError = noRecognizerMsg
+        }
+    }
+
+    LaunchedEffect(voiceLaunchRequest.nonce) {
+        val pendingQuery = voiceLaunchRequest.query
+        when {
+            !pendingQuery.isNullOrBlank() -> {
+                executeVoiceCommand(pendingQuery, speakAloud = true)
+                onConsumeVoiceLaunch()
+            }
+            voiceLaunchRequest.autoListen -> {
+                launchSpeechRecognizer()
+                onConsumeVoiceLaunch()
+            }
+        }
+    }
 
     val persistedTimer by AppSettingsPreferences.observeTimerState(context).collectAsStateWithLifecycle()
     var bannerRemainingSec by remember { mutableIntStateOf(0) }
@@ -255,13 +362,178 @@ fun CookingAssistantScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    exposedTools.forEach { (toolLabel, sampleVoice) ->
+                    Button(
+                        onClick = { launchSpeechRecognizer() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("voice_ask_mic_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = stringResource(R.string.voice_ask_btn),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.voice_ask_btn),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = manualQueryInput,
+                        onValueChange = { manualQueryInput = it },
+                        placeholder = {
+                            Text(
+                                text = stringResource(R.string.voice_manual_hint),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { executeVoiceCommand(manualQueryInput, speakAloud = true) }
+                        ),
+                        trailingIcon = {
+                            IconButton(
+                                onClick = { executeVoiceCommand(manualQueryInput, speakAloud = true) },
+                                enabled = manualQueryInput.isNotBlank() && !isExecutingVoice,
+                                modifier = Modifier.testTag("voice_manual_query_send")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = stringResource(R.string.voice_manual_send),
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("voice_manual_query_input")
+                    )
+
+                    if (recognizerError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = recognizerError!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("voice_recognizer_error")
+                        )
+                    }
+
+                    if (isExecutingVoice) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.voice_loading_answer),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+
+                    val activeResult = voiceResult
+                    if (activeResult != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            color = PostItMint.copy(alpha = 0.72f),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .sketchedBorder(
+                                    color = if (activeResult.isSuccess) StockGreen else MaterialTheme.colorScheme.error,
+                                    strokeWidthDp = 1.5f
+                                )
+                                .testTag("voice_answer_card")
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.voice_answer_title),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            speechPlayer.stop()
+                                            voiceResult = null
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = stringResource(R.string.action_close),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = stringResource(R.string.voice_answer_query_prefix, activeResult.query),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = activeResult.summaryText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(
+                                        onClick = {
+                                            if (isSpeaking) speechPlayer.stop() else speechPlayer.speak(activeResult.summaryText)
+                                        },
+                                        modifier = Modifier.testTag("voice_replay_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isSpeaking) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isSpeaking) {
+                                                stringResource(R.string.voice_stop_btn)
+                                            } else {
+                                                stringResource(R.string.voice_replay_btn)
+                                            },
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    exposedTools.forEachIndexed { idx, (toolLabel, sampleVoice) ->
                         Surface(
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                             shape = RoundedCornerShape(8.dp),
+                            onClick = {
+                                val cleanedSample = sampleVoice.trim().trim('"', '“', '”', '«', '»')
+                                executeVoiceCommand(cleanedSample, speakAloud = true)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 3.dp)
+                                .testTag("voice_sample_${idx + 1}")
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                                 Text(

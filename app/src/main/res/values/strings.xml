@@ -7,6 +7,8 @@
     <string name="shortcut_shopping_long">Ver lista de compras pendiente</string>
     <string name="shortcut_cooking_voice_short">Cocina y Voz</string>
     <string name="shortcut_cooking_voice_long">Temporizador, viabilidad y comandos de voz</string>
+    <string name="shortcut_voice_ask_short">Preguntar voz</string>
+    <string name="shortcut_voice_ask_long">Consultar despensa o recetas por voz</string>
 
     <!-- Navigation & TopBar -->
     <string name="tab_recipes">Recetas</string>
@@ -372,8 +374,8 @@
     <string name="cook_voice_source_guest">Fuente activa: Modo Invitado • Solo local (%1$d insumos, %2$d recetas)</string>
     <string name="cook_voice_source_cloud">Fuente activa: %1$s (%2$d insumos, %3$d recetas)</string>
     <string name="cook_voice_desc">Esta aplicación no ejecuta IA interna. Expone tu despensa, lista de compras y recetas en segundo plano mediante Android AppFunctions y App Actions para que cualquier asistente de voz o agente de IA compatible responda sin abrir la aplicación.</string>
-    <string name="cook_voice_try">Prueba decir: %1$s</string>
-    <string name="cook_voice_compat">Compatibilidad Android: para responder con el teléfono bloqueado o sin abrir la pantalla, tu dispositivo y el asistente que elijas deben ser compatibles con AppFunctions del sistema y tener activadas las respuestas en pantalla de bloqueo.</string>
+    <string name="cook_voice_try">Toca para probar: %1$s</string>
+    <string name="cook_voice_compat">Por qué no depende de Drive ni de la nube: tus datos ya se guardan en el dispositivo o en Firestore. En Android 16+ con asistentes autorizados (EAP de Google), AppFunctions responde sin abrir la app; en cualquier Android (7-16) puedes decir \"Ok Google, busca huevos en Recetario\", usar recetario://voice en Bixby Routines, mantener el ícono (\"Preguntar voz\") o tocar un comando arriba.</string>
     <string name="cook_voice_tool1_title">Stock en despensa (consultarStockDespensa)</string>
     <string name="cook_voice_tool1_sample">\"¿Cuánto tengo de huevos en Recetario?\"</string>
     <string name="cook_voice_tool2_title">Alertas de reposición (listarStockBajoDespensa)</string>
@@ -384,6 +386,17 @@
     <string name="cook_voice_tool4_sample">\"¿Qué tengo pendiente en mi lista de compras de Recetario?\"</string>
     <string name="cook_voice_tool5_title">Viabilidad y costos (verificarProduccionReceta)</string>
     <string name="cook_voice_tool5_sample">\"¿Me alcanza en Recetario para 8 porciones de Tortilla?\"</string>
+    <string name="voice_ask_btn">Preguntar por voz</string>
+    <string name="voice_manual_hint">Escribe o dicta: ej. \"huevos\", \"stock bajo\", \"qué puedo cocinar\"...</string>
+    <string name="voice_manual_send">Consultar</string>
+    <string name="voice_prompt_speech">Pregunta sobre tu despensa, compras o recetas</string>
+    <string name="voice_answer_title">Respuesta del asistente</string>
+    <string name="voice_answer_query_prefix">Consulta: %1$s</string>
+    <string name="voice_replay_btn">Escuchar</string>
+    <string name="voice_stop_btn">Detener voz</string>
+    <string name="voice_no_recognizer_msg">No se encontró motor de dictado de voz en este dispositivo. Usa los botones de prueba o escribe tu consulta.</string>
+    <string name="voice_error_generic">No se pudo completar la consulta de voz.</string>
+    <string name="voice_loading_answer">Consultando despensa y recetas...</string>
 
     <string name="cook_timer_section">Temporizador de Cocina</string>
     <string name="cook_timer_running_banner">Temporizador activo: %1$s (%2$02d:%3$02d)</string>

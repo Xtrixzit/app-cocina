@@ -1,5 +1,6 @@
 package com.example
 
+import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color as AndroidColor
@@ -94,8 +95,17 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+import com.example.ai.VoiceCommandRouter
+
+data class VoiceLaunchRequest(
+    val tab: Int = 0,
+    val query: String? = null,
+    val autoListen: Boolean = false,
+    val nonce: Long = 0L
+)
+
 class MainActivity : ComponentActivity() {
-    private var requestedTabState by mutableIntStateOf(0)
+    private var voiceLaunchState by mutableStateOf(VoiceLaunchRequest())
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.wrapContext(newBase))
@@ -107,10 +117,16 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
         )
-        requestedTabState = resolveTabFromIntent(intent)
+        voiceLaunchState = resolveVoiceLaunchRequest(intent)
         setContent {
             MyApplicationTheme {
-                AppNavigation(initialTab = requestedTabState)
+                AppNavigation(
+                    initialTab = voiceLaunchState.tab,
+                    voiceLaunchRequest = voiceLaunchState,
+                    onConsumeVoiceLaunch = {
+                        voiceLaunchState = voiceLaunchState.copy(query = null, autoListen = false)
+                    }
+                )
             }
         }
     }
@@ -118,25 +134,77 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        requestedTabState = resolveTabFromIntent(intent)
+        voiceLaunchState = resolveVoiceLaunchRequest(intent)
     }
 
-    private fun resolveTabFromIntent(intent: Intent?): Int {
-        if (intent == null) return 0
-        if (intent.hasExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB)) {
-            return intent.getIntExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB, 0).coerceIn(0, 4)
-        }
-        val feature = intent.getStringExtra("featureName")
+    private fun resolveVoiceLaunchRequest(intent: Intent?): VoiceLaunchRequest {
+        if (intent == null) return VoiceLaunchRequest()
+        val nowNonce = System.nanoTime()
+
+        val dataUri = intent.data
+        val isVoiceDeepLink = dataUri != null &&
+            dataUri.scheme.equals(VoiceCommandRouter.DEEP_LINK_SCHEME, ignoreCase = true) &&
+            dataUri.host.equals(VoiceCommandRouter.DEEP_LINK_HOST_VOICE, ignoreCase = true)
+
+        val deepLinkQuery = if (isVoiceDeepLink) {
+            dataUri?.getQueryParameter("q") ?: dataUri?.getQueryParameter("query")
+        } else null
+        val deepLinkAutoListen = isVoiceDeepLink &&
+            dataUri?.getQueryParameter("autoListen").equals("true", ignoreCase = true)
+
+        val extraListen = intent.getBooleanExtra(VoiceCommandRouter.EXTRA_VOICE_LISTEN, false) ||
+            intent.getStringExtra(VoiceCommandRouter.EXTRA_VOICE_LISTEN).equals("true", ignoreCase = true)
+
+        val isSearchIntent = intent.action == Intent.ACTION_SEARCH ||
+            intent.action == "com.google.android.gms.actions.SEARCH_ACTION"
+
+        val searchQuery = intent.getStringExtra(SearchManager.QUERY)
             ?: intent.getStringExtra("query")
-            ?: return 0
-        val normalized = feature.lowercase()
-        return when {
-            normalized.contains("despensa") || normalized.contains("pantry") || normalized.contains("stock") -> 1
-            normalized.contains("compra") || normalized.contains("shopping") || normalized.contains("check") -> 2
-            normalized.contains("produccion") || normalized.contains("producción") || normalized.contains("production") -> 3
-            normalized.contains("voz") || normalized.contains("cocina") || normalized.contains("asistente") || normalized.contains("voice") -> 4
+            ?: deepLinkQuery
+
+        val featureName = intent.getStringExtra("featureName")
+
+        if (!searchQuery.isNullOrBlank()) {
+            return VoiceLaunchRequest(
+                tab = 4,
+                query = searchQuery.trim(),
+                autoListen = false,
+                nonce = nowNonce
+            )
+        }
+
+        if (isSearchIntent || extraListen || deepLinkAutoListen || isVoiceDeepLink) {
+            return VoiceLaunchRequest(
+                tab = 4,
+                query = null,
+                autoListen = extraListen || deepLinkAutoListen || isVoiceDeepLink || isSearchIntent,
+                nonce = nowNonce
+            )
+        }
+
+        val explicitTab = when {
+            intent.hasExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB) -> {
+                val intVal = intent.getIntExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB, -1)
+                if (intVal in 0..4) {
+                    intVal
+                } else {
+                    intent.getStringExtra(AppShortcutsUpdater.EXTRA_OPEN_TAB)?.toIntOrNull()?.coerceIn(0, 4) ?: 0
+                }
+            }
+            !featureName.isNullOrBlank() -> {
+                val normalized = featureName.lowercase()
+                when {
+                    normalized.contains("despensa") || normalized.contains("pantry") || normalized.contains("stock") -> 1
+                    normalized.contains("compra") || normalized.contains("shopping") || normalized.contains("check") -> 2
+                    normalized.contains("produccion") || normalized.contains("producción") || normalized.contains("production") -> 3
+                    normalized.contains("voz") || normalized.contains("cocina") || normalized.contains("asistente") || normalized.contains("voice") -> 4
+                    else -> 0
+                }
+            }
             else -> 0
         }
+
+        return VoiceLaunchRequest(tab = explicitTab, nonce = nowNonce)
     }
 }
 
@@ -151,6 +219,8 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
 @Composable
 fun AppNavigation(
     initialTab: Int = 0,
+    voiceLaunchRequest: VoiceLaunchRequest = VoiceLaunchRequest(tab = initialTab),
+    onConsumeVoiceLaunch: () -> Unit = {},
     auth: FirebaseAuth = Firebase.auth
 ) {
     val context = LocalContext.current
@@ -187,7 +257,9 @@ fun AppNavigation(
                     currentUserEmail = user.email.orEmpty(),
                     currentUserName = user.displayName.orEmpty(),
                     isGuestMode = false,
-                    initialTab = initialTab
+                    initialTab = initialTab,
+                    voiceLaunchRequest = voiceLaunchRequest,
+                    onConsumeVoiceLaunch = onConsumeVoiceLaunch
                 )
             }
         }
@@ -198,7 +270,9 @@ fun AppNavigation(
                     currentUserEmail = "",
                     currentUserName = stringResource(R.string.guest_display_name),
                     isGuestMode = true,
-                    initialTab = initialTab
+                    initialTab = initialTab,
+                    voiceLaunchRequest = voiceLaunchRequest,
+                    onConsumeVoiceLaunch = onConsumeVoiceLaunch
                 )
             }
         }
@@ -223,6 +297,8 @@ fun MainFeatureScreen(
     currentUserName: String,
     isGuestMode: Boolean = false,
     initialTab: Int = 0,
+    voiceLaunchRequest: VoiceLaunchRequest = VoiceLaunchRequest(tab = initialTab),
+    onConsumeVoiceLaunch: () -> Unit = {},
     viewModel: MainViewModel = viewModel(
         key = if (isGuestMode) CookingRepository.GUEST_USER_ID else currentUserId,
         factory = viewModelFactory {
@@ -247,7 +323,9 @@ fun MainFeatureScreen(
     val credentialManager = remember { CredentialManager.create(context) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
+    var selectedTab by remember(initialTab, voiceLaunchRequest.nonce) {
+        mutableIntStateOf(if (voiceLaunchRequest.query != null || voiceLaunchRequest.autoListen) 4 else initialTab)
+    }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showAccountDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -455,7 +533,9 @@ fun MainFeatureScreen(
                             viewModel = viewModel,
                             recipes = recipesList,
                             pantryItems = pantryItems,
-                            onSelectRecipe = { recipe -> viewModel.selectRecipe(recipe) }
+                            onSelectRecipe = { recipe -> viewModel.selectRecipe(recipe) },
+                            voiceLaunchRequest = voiceLaunchRequest,
+                            onConsumeVoiceLaunch = onConsumeVoiceLaunch
                         )
                     }
                 }

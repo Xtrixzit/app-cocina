@@ -7,6 +7,8 @@
     <string name="shortcut_shopping_long">View pending shopping list</string>
     <string name="shortcut_cooking_voice_short">Cook &amp; Voice</string>
     <string name="shortcut_cooking_voice_long">Timers, feasibility and voice queries</string>
+    <string name="shortcut_voice_ask_short">Ask by voice</string>
+    <string name="shortcut_voice_ask_long">Query pantry or recipes by voice</string>
 
     <!-- Navigation & TopBar -->
     <string name="tab_recipes">Recipes</string>
@@ -372,8 +374,8 @@
     <string name="cook_voice_source_guest">Active source: Guest Mode • Local only (%1$d pantry items, %2$d recipes)</string>
     <string name="cook_voice_source_cloud">Active source: %1$s (%2$d pantry items, %3$d recipes)</string>
     <string name="cook_voice_desc">This app runs no in-app AI. It exposes your pantry, shopping list, and recipes in the background via Android AppFunctions &amp; App Actions so any compatible voice assistant or AI agent can answer without opening the app.</string>
-    <string name="cook_voice_try">Try saying: %1$s</string>
-    <string name="cook_voice_compat">Android Compatibility: to answer on lock screen or without opening the UI, your device and chosen assistant must support system AppFunctions and have lock-screen responses enabled.</string>
+    <string name="cook_voice_try">Tap to test: %1$s</string>
+    <string name="cook_voice_compat">Not a cloud/Drive issue: your data is already stored locally or in Firestore. Background AppFunctions require Android 16+ and Google Early Access system agents; on any Android (7-16) you can say \"Hey Google, search eggs in Recetario\", trigger recetario://voice in Bixby Routines, long-press the app icon (\"Ask by voice\"), or tap a command above.</string>
     <string name="cook_voice_tool1_title">Pantry Stock (consultarStockDespensa)</string>
     <string name="cook_voice_tool1_sample">\"How many eggs do I have in Recetario?\"</string>
     <string name="cook_voice_tool2_title">Restock Alerts (listarStockBajoDespensa)</string>
@@ -384,6 +386,17 @@
     <string name="cook_voice_tool4_sample">\"What is pending on my Recetario shopping list?\"</string>
     <string name="cook_voice_tool5_title">Production Feasibility &amp; Cost (verificarProduccionReceta)</string>
     <string name="cook_voice_tool5_sample">\"Can I make 8 servings of Tortilla in Recetario?\"</string>
+    <string name="voice_ask_btn">Ask by Voice</string>
+    <string name="voice_manual_hint">Type or speak: e.g. \"eggs\", \"low stock\", \"what can I cook\"...</string>
+    <string name="voice_manual_send">Ask</string>
+    <string name="voice_prompt_speech">Ask about your pantry, shopping list, or recipes</string>
+    <string name="voice_answer_title">Voice Answer</string>
+    <string name="voice_answer_query_prefix">Query: %1$s</string>
+    <string name="voice_replay_btn">Speak</string>
+    <string name="voice_stop_btn">Stop</string>
+    <string name="voice_no_recognizer_msg">No speech recognizer engine found on this device. Tap a sample command or type your query.</string>
+    <string name="voice_error_generic">Could not complete the voice query.</string>
+    <string name="voice_loading_answer">Checking pantry &amp; recipes...</string>
 
     <string name="cook_timer_section">Kitchen Timer</string>
     <string name="cook_timer_running_banner">Active timer: %1$s (%2$02d:%3$02d)</string>

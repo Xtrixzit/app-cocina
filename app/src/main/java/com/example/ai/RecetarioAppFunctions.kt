@@ -310,6 +310,21 @@ class RecetarioAppFunctions {
         is ActiveSource.LocalGuest -> loc.getString(R.string.af_src_guest)
     }
 
+    private fun stemSpanishEnglish(word: String): String = when {
+        word.length > 4 && word.endsWith("es") -> word.dropLast(2)
+        word.length > 3 && word.endsWith("s") -> word.dropLast(1)
+        else -> word
+    }
+
+    private fun matchesFlexibleQuery(candidateRaw: String, queryNorm: String): Boolean {
+        if (queryNorm.isBlank()) return true
+        val candidateNorm = normalizeText(candidateRaw)
+        if (candidateNorm.contains(queryNorm) || queryNorm.contains(candidateNorm)) return true
+        val qStem = stemSpanishEnglish(queryNorm)
+        val cStem = stemSpanishEnglish(candidateNorm)
+        return qStem.length >= 3 && (candidateNorm.contains(qStem) || cStem.contains(qStem) || queryNorm.contains(cStem))
+    }
+
     /**
      * Queries current pantry inventory without opening the app.
      *
@@ -330,9 +345,7 @@ class RecetarioAppFunctions {
             allItems
         } else {
             allItems.filter {
-                val itemNorm = normalizeText(it.name)
-                val catNorm = normalizeText(it.category)
-                itemNorm.contains(query) || query.contains(itemNorm) || catNorm.contains(query)
+                matchesFlexibleQuery(it.name, query) || matchesFlexibleQuery(it.category, query)
             }
         }
 
@@ -431,8 +444,7 @@ class RecetarioAppFunctions {
         val recipes = loadRecipesForSource(appFunctionContext, source)
         val query = normalizeText(nombreReceta)
         val recipe = recipes.firstOrNull {
-            val titleNorm = normalizeText(it.title)
-            titleNorm.contains(query) || query.contains(titleNorm)
+            matchesFlexibleQuery(it.title, query)
         } ?: throw AppFunctionElementNotFoundException(loc.getString(R.string.af_recipe_not_found, nombreReceta))
 
         val pantry = loadPantryItemsForSource(appFunctionContext, source)

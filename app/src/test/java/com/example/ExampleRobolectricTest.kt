@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.core.app.ApplicationProvider
 import com.example.ai.RecetarioAppFunctions
+import com.example.ai.VoiceCommandRouter
 import com.example.auth.SessionPreferences
 import com.example.data.local.CookingDatabase
 import com.example.data.local.entity.PantryEntity
@@ -338,8 +339,79 @@ class ExampleRobolectricTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("voice_provider_info_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("voice_ask_mic_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("voice_manual_query_input").assertIsDisplayed()
         composeRule.onNodeWithTag("gemini_prompt_input").assertDoesNotExist()
         SessionPreferences.setGuestMode(context, false)
+    }
+
+    @Test
+    fun `voiceCommandRouter parses multilingual queries and executes against guest DB`() = runBlocking {
+        // Parsing checks across ES / EN / PT / FR
+        val eggLookup = VoiceCommandRouter.parseIntent("¿Cuánto tengo de huevos en Recetario?")
+        assertTrue(eggLookup is VoiceCommandRouter.ParsedVoiceIntent.PantryLookup)
+        assertEquals("huevos", (eggLookup as VoiceCommandRouter.ParsedVoiceIntent.PantryLookup).ingredientQuery)
+
+        assertTrue(VoiceCommandRouter.parseIntent("stock bajo en despensa") is VoiceCommandRouter.ParsedVoiceIntent.LowStock)
+        assertTrue(VoiceCommandRouter.parseIntent("What pantry items are low or out?") is VoiceCommandRouter.ParsedVoiceIntent.LowStock)
+
+        val shopIntent = VoiceCommandRouter.parseIntent("lista de compras pendiente")
+        assertTrue(shopIntent is VoiceCommandRouter.ParsedVoiceIntent.ShoppingList)
+        assertTrue((shopIntent as VoiceCommandRouter.ParsedVoiceIntent.ShoppingList).onlyPending)
+
+        assertTrue(VoiceCommandRouter.parseIntent("What can I cook today?") is VoiceCommandRouter.ParsedVoiceIntent.AvailableRecipes)
+        assertTrue(VoiceCommandRouter.parseIntent("O que posso cozinhar hoje?") is VoiceCommandRouter.ParsedVoiceIntent.AvailableRecipes)
+
+        val feasIntent = VoiceCommandRouter.parseIntent("¿Me alcanza para 8 porciones de Tortilla en Recetario?")
+        assertTrue(feasIntent is VoiceCommandRouter.ParsedVoiceIntent.RecipeFeasibility)
+        val castFeas = feasIntent as VoiceCommandRouter.ParsedVoiceIntent.RecipeFeasibility
+        assertEquals(8, castFeas.servings)
+        assertEquals("tortilla", castFeas.recipeQuery)
+
+        // End-to-end execution with singular/plural ingredient matching on Guest Room DB
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        FirebaseAuth.getInstance().signOut()
+        SessionPreferences.setGuestMode(context, true)
+        AppSettingsPreferences.setLanguageCode(context, "es")
+
+        val db = CookingDatabase.resetDatabase(context)
+        db.pantryDao().insertOrUpdate(
+            PantryEntity.fromDomain(
+                PantryItem(
+                    id = "p1",
+                    userId = CookingRepository.GUEST_USER_ID,
+                    name = "Huevos",
+                    quantity = 10.0,
+                    unit = "unidades",
+                    minQuantity = 4.0
+                )
+            )
+        )
+        db.recipeDao().insertOrUpdate(
+            RecipeEntity.fromDomain(
+                Recipe(
+                    id = "r1",
+                    userId = CookingRepository.GUEST_USER_ID,
+                    title = "Tortilla",
+                    servings = 4,
+                    ingredients = listOf(RecipeIngredient(name = "Huevos", amount = 4.0, unit = "unidades"))
+                )
+            )
+        )
+
+        val singularLookup = VoiceCommandRouter.executeVoiceQuery(context, "cuanto tengo de huevo")
+        assertTrue(singularLookup.isSuccess)
+        assertTrue(singularLookup.summaryText.contains("Huevos: 10"))
+
+        val feasResult = VoiceCommandRouter.executeVoiceQuery(context, "¿Me alcanza para 8 porciones de Tortilla?")
+        assertTrue(feasResult.isSuccess)
+        assertTrue(feasResult.summaryText.contains("Tortilla"))
+
+        SessionPreferences.setGuestMode(context, false)
+        AppSettingsPreferences.setLanguageCode(context, "")
     }
 
     @Test
