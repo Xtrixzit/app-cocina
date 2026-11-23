@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -73,6 +74,7 @@ import com.example.ui.components.NotebookBottomBar
 import com.example.ui.components.PrivacyPolicyDialog
 import com.example.ui.components.UpdateAvailableDialog
 import com.example.ui.screens.AuthScreen
+import com.example.ui.screens.ChefChatDialog
 import com.example.ui.screens.CookingAssistantScreen
 import com.example.ui.screens.PantryFormDialog
 import com.example.ui.screens.PantryScreen
@@ -339,12 +341,16 @@ fun MainFeatureScreen(
     val licenseValidated by viewModel.licenseValidated.collectAsStateWithLifecycle()
     val localGuestCount by viewModel.localGuestCountForMigration.collectAsStateWithLifecycle()
     val recipePhotoGenState by viewModel.recipePhotoGenState.collectAsStateWithLifecycle()
+    val chefChatMessages by viewModel.chefChatMessages.collectAsStateWithLifecycle()
+    val chefChatRole by viewModel.chefChatRole.collectAsStateWithLifecycle()
+    val chefChatSending by viewModel.chefChatSending.collectAsStateWithLifecycle()
 
     val selectedRecipe by viewModel.selectedRecipe.collectAsState()
     val targetServings by viewModel.targetServings.collectAsState()
     var recipeFormTarget by remember { mutableStateOf<Recipe?>(null) }
     var showRecipeForm by remember { mutableStateOf(false) }
     var showPantryForm by remember { mutableStateOf(false) }
+    var showChefChatDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.userMessage.collectLatest { message ->
@@ -453,6 +459,16 @@ fun MainFeatureScreen(
                             }
                         }
                         IconButton(
+                            onClick = { showChefChatDialog = true },
+                            modifier = Modifier.testTag("action_chef_chat")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = stringResource(R.string.cd_chef_chat),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(
                             onClick = { showSettingsDialog = true },
                             modifier = Modifier.testTag("action_settings")
                         ) {
@@ -520,7 +536,8 @@ fun MainFeatureScreen(
                             onNavigateToCheckList = { selectedTab = 2 },
                             onNavigateToProduction = { selectedTab = 3 },
                             onNavigateToSurpriseMe = { selectedTab = 4 },
-                            onShowHelp = { showAboutDialog = true }
+                            onShowHelp = { showAboutDialog = true },
+                            onOpenChefChat = { showChefChatDialog = true }
                         )
                         1 -> PantryScreen(
                             viewModel = viewModel,
@@ -556,6 +573,12 @@ fun MainFeatureScreen(
             onGenerateAiPhoto = { title, category, ingredients ->
                 viewModel.generateRecipePhoto(title, category, ingredients)
             },
+            onGenerateAiPhotoWithAspect = { title, category, ingredients, aspectOption ->
+                viewModel.generateRecipePhoto(title, category, ingredients, aspectOption)
+            },
+            onEnhanceRealPhoto = { sourceUrl, title, category, aspectOption ->
+                viewModel.enhanceRecipePhoto(sourceUrl, title, category, aspectOption)
+            },
             onResetPhotoGenState = {
                 viewModel.resetRecipePhotoGenState()
             },
@@ -564,6 +587,22 @@ fun MainFeatureScreen(
                 showRecipeForm = false
             },
             onSave = { recipe -> viewModel.saveRecipe(recipe) }
+        )
+    }
+
+    if (showChefChatDialog) {
+        ChefChatDialog(
+            messages = chefChatMessages,
+            selectedRole = chefChatRole,
+            isSending = chefChatSending,
+            pantryCount = pantryItems.size,
+            recipeCount = recipesList.size,
+            onSelectRole = { role -> viewModel.setChefChatRole(role) },
+            onSendMessage = { prompt, attachedImage ->
+                viewModel.sendChefChatMessage(prompt, attachedImage)
+            },
+            onClearChat = { viewModel.clearChefChat() },
+            onDismiss = { showChefChatDialog = false }
         )
     }
 

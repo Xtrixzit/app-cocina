@@ -20,15 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.BreakfastDining
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DinnerDining
-import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.LocalDining
-import androidx.compose.material.icons.filled.LunchDining
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -75,22 +69,6 @@ fun RecipeCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
-    val categoryGradient = when (recipe.category.lowercase()) {
-        "desayunos" -> listOf(Color(0xFFEA580C), Color(0xFFFBBF24))
-        "almuerzos" -> listOf(Color(0xFFDC2626), Color(0xFFFB923C))
-        "cenas" -> listOf(Color(0xFF15803D), Color(0xFF84CC16))
-        "postres" -> listOf(Color(0xFFBE185D), Color(0xFFF472B6))
-        else -> listOf(Color(0xFF0284C7), Color(0xFF38BDF8))
-    }
-
-    val foodIcon = when (recipe.category.lowercase()) {
-        "desayunos" -> Icons.Default.BreakfastDining
-        "almuerzos" -> Icons.Default.LunchDining
-        "cenas" -> Icons.Default.DinnerDining
-        "postres" -> Icons.Default.LocalCafe
-        else -> Icons.Default.Restaurant
-    }
 
     Card(
         modifier = modifier
@@ -198,31 +176,17 @@ fun RecipeCard(
                             .padding(4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (recipe.imageUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = ImageUtils.toImageModel(recipe.imageUrl),
-                                contentDescription = recipe.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(2.dp))
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Brush.linearGradient(categoryGradient)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = foodIcon,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(34.dp)
-                                )
-                            }
+                        val effectivePhotoUri = recipe.imageUrl.ifBlank {
+                            ImageUtils.defaultUriForCategory(recipe.category)
                         }
+                        AsyncImage(
+                            model = ImageUtils.toImageModel(effectivePhotoUri),
+                            contentDescription = recipe.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(2.dp))
+                        )
                     }
 
                     Column(modifier = Modifier.weight(1f)) {

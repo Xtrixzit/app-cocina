@@ -238,25 +238,26 @@ fun RecipeDetailScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (recipe.imageUrl.isNotBlank()) {
-                Box(
+            val effectivePhotoUri = recipe.imageUrl.ifBlank {
+                ImageUtils.defaultUriForCategory(recipe.category)
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(230.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), strokeWidthDp = 1.8f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageUtils.toImageModel(effectivePhotoUri),
+                    contentDescription = stringResource(R.string.recipe_detail_photo_cd, recipe.title),
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(230.dp)
+                        .fillMaxSize()
                         .clip(RoundedCornerShape(12.dp))
-                        .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), strokeWidthDp = 1.8f)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = ImageUtils.toImageModel(recipe.imageUrl),
-                        contentDescription = stringResource(R.string.recipe_detail_photo_cd, recipe.title),
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(12.dp))
-                    )
-                }
+                )
             }
 
             Row(

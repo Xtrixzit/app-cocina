@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.PrecisionManufacturing
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -282,27 +281,18 @@ fun ProductionScreen(
                                             .padding(12.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        if (recipe.imageUrl.isNotBlank()) {
-                                            AsyncImage(
-                                                model = ImageUtils.toImageModel(recipe.imageUrl),
-                                                contentDescription = recipe.title,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier
-                                                    .size(60.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                            )
-                                        } else {
-                                            Surface(
-                                                modifier = Modifier.size(60.dp),
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(Icons.Default.Scale, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                                                }
-                                            }
+                                        val listPhotoUri = recipe.imageUrl.ifBlank {
+                                            ImageUtils.defaultUriForCategory(recipe.category)
                                         }
+                                        AsyncImage(
+                                            model = ImageUtils.toImageModel(listPhotoUri),
+                                            contentDescription = recipe.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        )
 
                                         Spacer(modifier = Modifier.width(12.dp))
 
@@ -519,18 +509,19 @@ fun ProductionScreen(
                                     modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    if (recipe.imageUrl.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageUtils.toImageModel(recipe.imageUrl),
-                                            contentDescription = recipe.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(54.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
+                                    val headerPhotoUri = recipe.imageUrl.ifBlank {
+                                        ImageUtils.defaultUriForCategory(recipe.category)
                                     }
+                                    AsyncImage(
+                                        model = ImageUtils.toImageModel(headerPhotoUri),
+                                        contentDescription = recipe.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(54.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
 
                                     Column {
                                         Text(

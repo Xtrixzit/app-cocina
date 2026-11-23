@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FormatListNumbered
@@ -92,6 +94,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.ai.PhotoAspectOption
 import com.example.ai.RecipePhotoGenState
 import com.example.data.model.Recipe
 import com.example.data.model.RecipeIngredient
@@ -114,6 +117,8 @@ fun RecipeFormDialog(
     initialRecipe: Recipe? = null,
     photoGenState: RecipePhotoGenState = RecipePhotoGenState.Idle,
     onGenerateAiPhoto: (title: String, category: String, ingredients: List<RecipeIngredient>) -> Unit = { _, _, _ -> },
+    onGenerateAiPhotoWithAspect: ((title: String, category: String, ingredients: List<RecipeIngredient>, aspectOption: PhotoAspectOption) -> Unit)? = null,
+    onEnhanceRealPhoto: (sourceImageUrl: String, title: String, category: String, aspectOption: PhotoAspectOption) -> Unit = { _, _, _, _ -> },
     onResetPhotoGenState: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (Recipe) -> Unit
@@ -131,6 +136,9 @@ fun RecipeFormDialog(
     var notes by remember { mutableStateOf(initialRecipe?.notes ?: "") }
     var imageUrl by remember { mutableStateOf(initialRecipe?.imageUrl ?: "") }
     var showUrlPhotoDialog by remember { mutableStateOf(false) }
+    var selectedAspectOption by remember { mutableStateOf(PhotoAspectOption.RATIO_4_3) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(photoGenState) {
         if (photoGenState is RecipePhotoGenState.Success) {
@@ -169,8 +177,32 @@ fun RecipeFormDialog(
     ) { uri: Uri? ->
         if (uri != null) {
             onResetPhotoGenState()
+            cameraError = null
             val savedPath = ImageUtils.saveImageLocally(context, uri)
             imageUrl = savedPath
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        val captureUri = pendingCameraUri
+        if (success && captureUri != null) {
+            onResetPhotoGenState()
+            cameraError = null
+            val savedPath = ImageUtils.saveImageLocally(context, captureUri)
+            imageUrl = savedPath
+        }
+    }
+
+    fun launchRealCameraCapture() {
+        try {
+            val outUri = ImageUtils.createCameraTempImageUri(context)
+            pendingCameraUri = outUri
+            cameraError = null
+            cameraLauncher.launch(outUri)
+        } catch (_: Exception) {
+            cameraError = context.getString(R.string.recipe_photo_camera_unavailable)
         }
     }
 
@@ -399,6 +431,15 @@ fun RecipeFormDialog(
                             }
                         }
 
+                        if (cameraError != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = cameraError!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
                         if (photoGenState is RecipePhotoGenState.Error) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
@@ -420,14 +461,64 @@ fun RecipeFormDialog(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        // Aspect ratio chips for realistic AI photo generation & enhancement
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.recipe_form_aspect_label),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                itemsIndexed(PhotoAspectOption.entries) { _, option ->
+                                    FilterChip(
+                                        selected = selectedAspectOption == option,
+                                        onClick = { selectedAspectOption = option },
+                                        enabled = photoGenState !is RecipePhotoGenState.Generating,
+                                        label = { Text(stringResource(option.labelResId)) },
+                                        modifier = Modifier.testTag("recipe_form_aspect_${option.name}")
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             FilledTonalButton(
+                                onClick = { launchRealCameraCapture() },
+                                enabled = photoGenState !is RecipePhotoGenState.Generating,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.testTag("recipe_form_camera_photo")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.recipe_form_photo_camera_btn))
+                            }
+
+                            FilledTonalButton(
                                 onClick = {
-                                    onGenerateAiPhoto(title, category, ingredients.toList())
+                                    val aspectCallback = onGenerateAiPhotoWithAspect
+                                    if (aspectCallback != null) {
+                                        aspectCallback(title, category, ingredients.toList(), selectedAspectOption)
+                                    } else {
+                                        onGenerateAiPhoto(title, category, ingredients.toList())
+                                    }
                                 },
                                 enabled = photoGenState !is RecipePhotoGenState.Generating,
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -440,6 +531,25 @@ fun RecipeFormDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(stringResource(R.string.recipe_form_photo_ai_btn))
+                            }
+
+                            if (imageUrl.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        onEnhanceRealPhoto(imageUrl, title, category, selectedAspectOption)
+                                    },
+                                    enabled = photoGenState !is RecipePhotoGenState.Generating,
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.testTag("recipe_form_ai_enhance_photo")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoFixHigh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.recipe_form_photo_enhance_btn))
+                                }
                             }
 
                             OutlinedButton(

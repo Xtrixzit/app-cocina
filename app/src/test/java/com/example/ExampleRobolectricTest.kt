@@ -46,8 +46,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import android.graphics.Bitmap
 import androidx.compose.ui.test.performTextInput
+import com.example.ai.ChefChatMessage
+import com.example.ai.ChefChatRepository
+import com.example.ai.ChefChatRole
+import com.example.ai.PhotoAspectOption
 import com.example.ai.RecipePhotoGenState
 import com.example.ai.RecipePhotoGenerator
+import com.example.ui.screens.ChefChatDialog
 import com.example.ui.screens.RecipeFormDialog
 import com.example.util.ImageUtils
 import org.robolectric.RobolectricTestRunner
@@ -625,5 +630,147 @@ class ExampleRobolectricTest {
         assertNotNull(savedRecipe)
         assertEquals("Arroz con Pollo", savedRecipe!!.title)
         assertEquals(ImageUtils.referentialPhotoPresets[0].uriKey, savedRecipe!!.imageUrl)
+    }
+
+    @Test
+    fun `imageUtils maps recipe categories to bundled DSLR default drawables`() {
+        assertEquals(ImageUtils.REF_PANCAKES, ImageUtils.defaultUriForCategory("Desayunos"))
+        assertEquals(ImageUtils.REF_DESSERT, ImageUtils.defaultUriForCategory("Postres"))
+        assertEquals(ImageUtils.REF_PASTA, ImageUtils.defaultUriForCategory("Cenas"))
+        assertEquals(ImageUtils.REF_TORTILLA, ImageUtils.defaultUriForCategory("Snacks"))
+        assertEquals(ImageUtils.REF_LUNCH, ImageUtils.defaultUriForCategory("Almuerzos"))
+
+        assertEquals(
+            R.drawable.img_ref_panqueques_avena,
+            ImageUtils.defaultDrawableForCategory("Breakfast")
+        )
+        assertEquals(
+            R.drawable.img_ref_postre_casero,
+            ImageUtils.defaultDrawableForCategory("Dessert")
+        )
+        assertEquals(
+            R.drawable.img_ref_almuerzo_casero,
+            ImageUtils.defaultDrawableForCategory("Almuerzos")
+        )
+    }
+
+    @Test
+    fun `recipePhotoGenerator configures 4_3 16_9 9_16 aspect ratios and real photo enhancement prompt`() {
+        assertEquals(3, PhotoAspectOption.entries.size)
+        assertEquals(
+            setOf(
+                PhotoAspectOption.RATIO_4_3,
+                PhotoAspectOption.LANDSCAPE_16_9,
+                PhotoAspectOption.PORTRAIT_9_16
+            ),
+            PhotoAspectOption.entries.toSet()
+        )
+
+        val enhancePrompt = RecipePhotoGenerator.buildEnhancementPrompt("Lomo Saltado", "Almuerzos")
+        assertTrue(enhancePrompt.contains("Lomo Saltado"))
+        assertTrue(enhancePrompt.contains("DSLR culinary photograph"))
+        assertTrue(enhancePrompt.contains("NO cartoon"))
+    }
+
+    @Test
+    fun `chefChatRepository maps Gemini 3_8 and 4 models and builds grounded system instruction`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+
+        assertEquals("gemini-3.8-flash", ChefChatRole.GENERAL.modelName)
+        assertEquals("gemini-4-argon", ChefChatRole.REASONING.modelName)
+        assertEquals("gemini-3.5-flash-lite", ChefChatRole.FAST.modelName)
+
+        val sysPrompt = ChefChatRepository.buildSystemInstructionText(
+            context = context,
+            role = ChefChatRole.REASONING,
+            recipes = listOf(
+                Recipe(
+                    id = "r1",
+                    title = "Pasta al Pesto",
+                    servings = 4,
+                    ingredients = listOf(RecipeIngredient(name = "Albahaca", amount = 50.0, unit = "g"))
+                )
+            ),
+            pantry = listOf(
+                PantryItem(id = "p1", name = "Pasta", quantity = 500.0, unit = "g")
+            )
+        )
+
+        assertTrue(sysPrompt.contains("Spanish"))
+        assertTrue(sysPrompt.contains("Pasta: 500 g"))
+        assertTrue(sysPrompt.contains("Pasta al Pesto"))
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `recipeFormDialog shows camera capture aspect ratio chips and AI enhancement control`() {
+        var enhancedCalled = false
+        composeRule.setContent {
+            MyApplicationTheme {
+                RecipeFormDialog(
+                    initialRecipe = null,
+                    photoGenState = RecipePhotoGenState.Idle,
+                    onGenerateAiPhoto = { _, _, _ -> },
+                    onEnhanceRealPhoto = { _, _, _, _ -> enhancedCalled = true },
+                    onDismiss = {},
+                    onSave = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("recipe_form_camera_photo").assertIsDisplayed()
+        composeRule.onNodeWithTag("recipe_form_aspect_LANDSCAPE_16_9").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("recipe_form_aspect_PORTRAIT_9_16").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("recipe_form_ai_enhance_photo").assertDoesNotExist()
+
+        composeRule.onNodeWithTag("recipe_form_ref_0").performClick()
+        composeRule.onNodeWithTag("recipe_form_ai_enhance_photo")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+
+        assertTrue(enhancedCalled)
+    }
+
+    @Test
+    fun `chefChatDialog renders role selectors attachment buttons and multi turn thread`() {
+        var sentPrompt = ""
+        var selectedRole = ChefChatRole.GENERAL
+        val sampleThread = listOf(
+            ChefChatMessage(id = "m1", role = "user", text = "¿Qué puedo cocinar hoy?"),
+            ChefChatMessage(id = "m2", role = "model", text = "Tienes huevos y patatas para una tortilla española real.")
+        )
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                ChefChatDialog(
+                    messages = sampleThread,
+                    selectedRole = selectedRole,
+                    isSending = false,
+                    pantryCount = 5,
+                    recipeCount = 2,
+                    onSelectRole = { selectedRole = it },
+                    onSendMessage = { prompt, _ -> sentPrompt = prompt },
+                    onClearChat = {},
+                    onDismiss = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("chef_chat_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("chef_chat_role_GENERAL").assertIsDisplayed()
+        composeRule.onNodeWithTag("chef_chat_role_REASONING").assertIsDisplayed().performClick()
+        assertEquals(ChefChatRole.REASONING, selectedRole)
+
+        composeRule.onNodeWithTag("chef_chat_thread").assertIsDisplayed()
+        composeRule.onNodeWithTag("chef_chat_camera_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("chef_chat_gallery_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("chef_chat_input")
+            .assertIsDisplayed()
+            .performTextInput("Dame sustitutos de mantequilla")
+        composeRule.onNodeWithTag("chef_chat_send").performClick()
+
+        assertEquals("Dame sustitutos de mantequilla", sentPrompt)
     }
 }

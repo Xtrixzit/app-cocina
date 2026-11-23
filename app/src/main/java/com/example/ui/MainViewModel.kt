@@ -4,6 +4,11 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.R
+import com.example.ai.ChefChatMessage
+import com.example.ai.ChefChatRepository
+import com.example.ai.ChefChatRole
+import com.example.ai.ChefChatStreamEvent
+import com.example.ai.PhotoAspectOption
 import com.example.ai.RecipePhotoGenState
 import com.example.ai.RecipePhotoGenerator
 import com.example.data.model.DistributionConfig
@@ -74,10 +79,20 @@ class MainViewModel(
     private val _recipePhotoGenState = MutableStateFlow<RecipePhotoGenState>(RecipePhotoGenState.Idle)
     val recipePhotoGenState: StateFlow<RecipePhotoGenState> = _recipePhotoGenState.asStateFlow()
 
+    private val _chefChatMessages = MutableStateFlow<List<ChefChatMessage>>(emptyList())
+    val chefChatMessages: StateFlow<List<ChefChatMessage>> = _chefChatMessages.asStateFlow()
+
+    private val _chefChatRole = MutableStateFlow(ChefChatRole.GENERAL)
+    val chefChatRole: StateFlow<ChefChatRole> = _chefChatRole.asStateFlow()
+
+    private val _chefChatSending = MutableStateFlow(false)
+    val chefChatSending: StateFlow<Boolean> = _chefChatSending.asStateFlow()
+
     fun generateRecipePhoto(
         title: String,
         category: String,
-        ingredients: List<RecipeIngredient>
+        ingredients: List<RecipeIngredient>,
+        aspectOption: PhotoAspectOption = PhotoAspectOption.RATIO_4_3
     ) {
         if (_recipePhotoGenState.value is RecipePhotoGenState.Generating) return
         viewModelScope.launch {
@@ -86,7 +101,31 @@ class MainViewModel(
                 context = repository.context,
                 title = title,
                 category = category,
-                ingredients = ingredients
+                ingredients = ingredients,
+                aspectOption = aspectOption
+            )
+            _recipePhotoGenState.value = res.fold(
+                onSuccess = { RecipePhotoGenState.Success(it) },
+                onFailure = { RecipePhotoGenState.Error(it.localizedMessage ?: str(R.string.recipe_photo_ai_failed)) }
+            )
+        }
+    }
+
+    fun enhanceRecipePhoto(
+        sourceImageUrl: String,
+        title: String,
+        category: String,
+        aspectOption: PhotoAspectOption = PhotoAspectOption.RATIO_4_3
+    ) {
+        if (_recipePhotoGenState.value is RecipePhotoGenState.Generating) return
+        viewModelScope.launch {
+            _recipePhotoGenState.value = RecipePhotoGenState.Generating
+            val res = RecipePhotoGenerator.enhanceRealPhotoWithAi(
+                context = repository.context,
+                sourceImageUrl = sourceImageUrl,
+                title = title,
+                category = category,
+                aspectOption = aspectOption
             )
             _recipePhotoGenState.value = res.fold(
                 onSuccess = { RecipePhotoGenState.Success(it) },
@@ -97,6 +136,80 @@ class MainViewModel(
 
     fun resetRecipePhotoGenState() {
         _recipePhotoGenState.value = RecipePhotoGenState.Idle
+    }
+
+    fun setChefChatRole(role: ChefChatRole) {
+        _chefChatRole.value = role
+    }
+
+    fun clearChefChat() {
+        _chefChatMessages.value = emptyList()
+    }
+
+    fun sendChefChatMessage(
+        prompt: String,
+        attachedImageUri: String = ""
+    ) {
+        if (_chefChatSending.value) return
+        val trimmed = prompt.trim()
+        if (trimmed.isBlank() && attachedImageUri.isBlank()) return
+
+        val currentHistory = _chefChatMessages.value
+        val userMsgId = "u_${System.nanoTime()}"
+        val modelMsgId = "m_${System.nanoTime()}"
+
+        val userMessage = ChefChatMessage(
+            id = userMsgId,
+            role = "user",
+            text = trimmed.ifBlank { str(R.string.chef_chat_user_photo_badge) },
+            attachedImageUri = attachedImageUri
+        )
+        val placeholderModelMessage = ChefChatMessage(
+            id = modelMsgId,
+            role = "model",
+            text = ""
+        )
+
+        _chefChatMessages.value = currentHistory + userMessage + placeholderModelMessage
+        _chefChatSending.value = true
+
+        val currentRecipes = (recipesState.value as? UiState.Success)?.data ?: emptyList()
+        val currentPantry = (pantryState.value as? UiState.Success)?.data ?: emptyList()
+        val activeRole = _chefChatRole.value
+
+        viewModelScope.launch {
+            try {
+                ChefChatRepository.sendChatMessageStream(
+                    context = repository.context,
+                    role = activeRole,
+                    historyMessages = currentHistory,
+                    userPrompt = trimmed,
+                    attachedImageUri = attachedImageUri,
+                    recipes = currentRecipes,
+                    pantry = currentPantry
+                ).collect { event ->
+                    when (event) {
+                        is ChefChatStreamEvent.Chunk -> {
+                            _chefChatMessages.value = _chefChatMessages.value.map { msg ->
+                                if (msg.id == modelMsgId) msg.copy(text = event.accumulatedText) else msg
+                            }
+                        }
+                        is ChefChatStreamEvent.Completed -> {
+                            _chefChatMessages.value = _chefChatMessages.value.map { msg ->
+                                if (msg.id == modelMsgId) msg.copy(text = event.finalText, isError = false) else msg
+                            }
+                        }
+                        is ChefChatStreamEvent.Failed -> {
+                            _chefChatMessages.value = _chefChatMessages.value.map { msg ->
+                                if (msg.id == modelMsgId) msg.copy(text = event.errorMessage, isError = true) else msg
+                            }
+                        }
+                    }
+                }
+            } finally {
+                _chefChatSending.value = false
+            }
+        }
     }
 
     init {

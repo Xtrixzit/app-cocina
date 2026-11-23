@@ -27,6 +27,7 @@
     <string name="cd_cloud_account">Cuenta y sincronización en la nube</string>
     <string name="cd_info">Información y ajustes</string>
     <string name="cd_settings">Configuración</string>
+    <string name="cd_chef_chat">Consultar al Chef IA (Gemini)</string>
     <string name="guest_display_name">Invitado</string>
 
     <!-- Common Actions -->
@@ -101,6 +102,7 @@
     <string name="auth_google_btn">Conectar con Google</string>
     <string name="auth_guest_btn">Acceder como Invitado</string>
     <string name="auth_guest_note">Como invitado tus datos permanecen solo en este dispositivo y no se suben a la nube.</string>
+    <string name="auth_hero_banner_cd">Fotografía real de cocina casera y cuaderno culinario</string>
 
     <!-- Account & About Dialogs -->
     <string name="account_guest_title">Modo Invitado (Solo local)</string>
@@ -160,6 +162,9 @@
     <string name="recipes_quick_checklist">Check list</string>
     <string name="recipes_quick_cook">Cocinar</string>
     <string name="recipes_quick_help">Ayuda</string>
+    <string name="recipes_quick_chef_chat">Chef IA</string>
+    <string name="recipes_hero_photo_cd">Fotografía culinaria de plato casero recién preparado</string>
+    <string name="recipes_hero_real_badge">Fotografía Real • Sin Ficción</string>
     <string name="recipes_search_hint">Buscar recetas, ingredientes...</string>
     <string name="recipes_sync_error">Error de sincronización</string>
     <string name="recipes_empty_search">No se encontraron recetas</string>
@@ -227,13 +232,22 @@
     <string name="recipe_form_photo_title">Foto del Producto Final</string>
     <string name="recipe_form_photo_remove_cd">Quitar foto</string>
     <string name="recipe_form_photo_add">+ Toca para agregar foto del plato</string>
-    <string name="recipe_form_photo_sub">Galería, foto referencial, URL web o IA realista (sincronizada)</string>
+    <string name="recipe_form_photo_sub">Cámara, galería, foto referencial, URL web o IA realista (sincronizada)</string>
+    <string name="recipe_form_photo_camera_btn">Tomar foto</string>
     <string name="recipe_form_photo_gallery_btn">Galería</string>
     <string name="recipe_form_photo_ai_btn">Foto IA Real</string>
+    <string name="recipe_form_photo_enhance_btn">Mejorar realismo IA</string>
+    <string name="recipe_form_aspect_label">Formato IA:</string>
+    <string name="recipe_form_aspect_4_3">4:3 Foto</string>
+    <string name="recipe_form_aspect_16_9">16:9 Panorámica</string>
+    <string name="recipe_form_aspect_9_16">9:16 Vertical</string>
     <string name="recipe_form_photo_web_btn">Buscar / URL</string>
     <string name="recipe_form_photo_refs_title">Fotos referenciales realistas:</string>
     <string name="recipe_form_photo_ai_loading">Generando fotografía realista del plato (puede tardar 20–60 s)...</string>
+    <string name="recipe_photo_ai_enhancing">Mejorando iluminación y textura real del plato...</string>
     <string name="recipe_photo_ai_need_title">Escribe primero el nombre de la receta para generar una fotografía realista.</string>
+    <string name="recipe_photo_ai_need_source">Agrega o toma una foto primero para mejorar su realismo.</string>
+    <string name="recipe_photo_camera_unavailable">No hay aplicación de cámara disponible en este dispositivo.</string>
     <string name="recipe_photo_ai_empty">El modelo de IA no devolvió una imagen. Intenta de nuevo.</string>
     <string name="recipe_photo_ai_timeout">La generación de foto tardó más de 60 segundos. Intenta de nuevo.</string>
     <string name="recipe_photo_ai_failed">No se pudo generar la foto realista.</string>
@@ -543,4 +557,27 @@
     <string name="af_avail_ready">Puedes cocinar %1$d recetas completas ahora mismo: %2$s.%3$s</string>
     <string name="af_avail_almost">No tienes ninguna receta al 100%%, pero estas están casi listas: %1$s.</string>
     <string name="af_avail_low">Ninguna de tus %1$d recetas alcanza el 50%% de ingredientes disponibles en despensa. Revisa tu inventario o lista de compras.</string>
+
+    <!-- Gemini Multi-Turn Chef Chat -->
+    <string name="chef_chat_title">Chef IA • Asistente Culinario</string>
+    <string name="chef_chat_subtitle">Conversación continua conectada a tu despensa y recetas reales</string>
+    <string name="chef_chat_clear">Nueva charla</string>
+    <string name="chef_chat_role_general">Chef Práctico</string>
+    <string name="chef_chat_role_reasoning">Análisis y Costos</string>
+    <string name="chef_chat_role_fast">Respuesta Rápida</string>
+    <string name="chef_chat_welcome">¡Hola! Conozco tu despensa actual (%1$d productos) y tus %2$d recetas guardadas. Pregúntame qué cocinar, cómo sustituir un ingrediente o adjunta una foto real de tus ingredientes.</string>
+    <string name="chef_chat_prompt_1">¿Qué puedo cocinar hoy sin comprar nada?</string>
+    <string name="chef_chat_prompt_2">Optimiza el costo de mi próxima producción</string>
+    <string name="chef_chat_prompt_3">Sugiere sustituciones con lo que tengo en despensa</string>
+    <string name="chef_chat_input_hint">Escribe al Chef o adjunta una foto real...</string>
+    <string name="chef_chat_attach_photo">Adjuntar foto real</string>
+    <string name="chef_chat_photo_camera">Cámara</string>
+    <string name="chef_chat_photo_gallery">Galería</string>
+    <string name="chef_chat_remove_attachment">Quitar foto adjunta</string>
+    <string name="chef_chat_send_cd">Enviar mensaje</string>
+    <string name="chef_chat_user_photo_badge">Foto adjunta</string>
+    <string name="chef_chat_thinking">El Chef está revisando tu despensa...</string>
+    <string name="chef_chat_timeout">La consulta al Chef IA tardó más de 60 segundos. Intenta de nuevo.</string>
+    <string name="chef_chat_error_generic">No se pudo completar la consulta al Chef IA.</string>
+    <string name="chef_chat_empty_response">El modelo no devolvió texto. Intenta reformular tu pregunta.</string>
 </resources>

@@ -46,6 +46,31 @@ object ImageUtils {
         else -> null
     }
 
+    fun defaultUriForCategory(category: String): String {
+        val norm = category.trim().lowercase()
+        return when {
+            norm.contains("desayuno") || norm.contains("breakfast") || norm.contains("café") || norm.contains("petit") -> REF_PANCAKES
+            norm.contains("postre") || norm.contains("dessert") || norm.contains("sobremesa") -> REF_DESSERT
+            norm.contains("cena") || norm.contains("dinner") || norm.contains("jantar") || norm.contains("pasta") -> REF_PASTA
+            norm.contains("snack") || norm.contains("tortilla") -> REF_TORTILLA
+            else -> REF_LUNCH
+        }
+    }
+
+    @DrawableRes
+    fun defaultDrawableForCategory(category: String): Int =
+        resolveBundledDrawableOrNull(defaultUriForCategory(category)) ?: R.drawable.img_ref_almuerzo_casero
+
+    fun createCameraTempImageUri(context: Context): Uri {
+        val dir = java.io.File(context.cacheDir, "camera_photos").apply { mkdirs() }
+        val file = java.io.File(dir, "dish_${System.currentTimeMillis()}.jpg")
+        return androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+    }
+
     /**
      * Scales and compresses an in-memory [Bitmap] (for example, an AI-generated photo)
      * into a portable JPEG Base64 data URI under Firestore's field size budget.
@@ -85,7 +110,7 @@ object ImageUtils {
     }
 
     /**
-     * Compresses an image picked via Android Photo Picker into a portable JPEG Base64 data URI
+     * Compresses an image picked via Android Photo Picker or Camera into a portable JPEG Base64 data URI
      * so recipe thumbnails sync reliably across devices via Cloud Firestore & JSON backups.
      */
     fun saveImageLocally(context: Context, uri: Uri): String {
@@ -121,6 +146,36 @@ object ImageUtils {
             uri.toString()
         }
     }
+
+    suspend fun decodeImageModelToBitmap(context: Context, imageUrl: String): Bitmap? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val trimmed = imageUrl.trim()
+            if (trimmed.isBlank()) return@withContext null
+            try {
+                resolveBundledDrawableOrNull(trimmed)?.let { resId ->
+                    return@withContext BitmapFactory.decodeResource(context.resources, resId)
+                }
+                if (trimmed.startsWith("data:image", ignoreCase = true) && trimmed.contains("base64,")) {
+                    val bytes = Base64.decode(trimmed.substringAfter("base64,"), Base64.DEFAULT)
+                    return@withContext BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+                    val conn = java.net.URL(trimmed).openConnection().apply {
+                        connectTimeout = 8000
+                        readTimeout = 8000
+                    }
+                    conn.getInputStream().use { stream ->
+                        return@withContext BitmapFactory.decodeStream(stream)
+                    }
+                }
+                val parsedUri = Uri.parse(trimmed)
+                context.contentResolver.openInputStream(parsedUri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
 
     /**
      * Converts bundled referential photo keys (`res://...`), portable data URIs (`data:image/...`),

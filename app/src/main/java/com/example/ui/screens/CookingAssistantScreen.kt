@@ -62,7 +62,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -71,6 +73,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.R
 import com.example.VoiceLaunchRequest
 import com.example.ai.VoiceCommandRouter
@@ -94,6 +97,7 @@ import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
+import com.example.util.ImageUtils
 import com.example.util.LocaleHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -781,9 +785,22 @@ private fun FeasibilityRecipeCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val cardPhotoUri = recipe.imageUrl.ifBlank {
+                    ImageUtils.defaultUriForCategory(recipe.category)
+                }
+                AsyncImage(
+                    model = ImageUtils.toImageModel(cardPhotoUri),
+                    contentDescription = recipe.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                )
+
                 Text(
                     text = recipe.title,
                     fontFamily = CaveatFontFamily,

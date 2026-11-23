@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,11 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Search
@@ -25,14 +30,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,7 +79,8 @@ fun RecipesScreen(
     onNavigateToCheckList: () -> Unit = {},
     onNavigateToProduction: () -> Unit = {},
     onNavigateToSurpriseMe: () -> Unit = {},
-    onShowHelp: () -> Unit = {}
+    onShowHelp: () -> Unit = {},
+    onOpenChefChat: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val recipesUiState by viewModel.recipesState.collectAsState()
@@ -104,36 +115,95 @@ fun RecipesScreen(
                     .padding(horizontal = 20.dp, vertical = 6.dp)
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = stringResource(R.string.recipes_hero_word1),
-                        style = MaterialTheme.typography.displayMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = stringResource(R.string.recipes_hero_word2),
-                        style = MaterialTheme.typography.displayMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.recipes_hero_word1),
+                                style = MaterialTheme.typography.displayMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = stringResource(R.string.recipes_hero_word2),
+                                style = MaterialTheme.typography.displayMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
-                Box(
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2.4f)
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.recipes_hero_box),
-                        fontFamily = CaveatFontFamily,
-                        fontSize = 32.sp,
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2.4f)
+                                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.recipes_hero_box),
+                                    fontFamily = CaveatFontFamily,
+                                    fontSize = 30.sp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                onClick = onOpenChefChat,
+                                modifier = Modifier.testTag("recipes_open_chef_chat")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.recipes_quick_chef_chat),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .size(width = 96.dp, height = 84.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFFDF8))
+                            .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), strokeWidthDp = 1.6f)
+                            .padding(3.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.img_ref_tortilla_patatas),
+                            contentDescription = stringResource(R.string.recipes_hero_photo_cd),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(9.dp))
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
