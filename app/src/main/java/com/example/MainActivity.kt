@@ -95,7 +95,9 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+import com.example.ai.RecipePhotoGenState
 import com.example.ai.VoiceCommandRouter
+import com.example.ai.configureAppCheck
 
 data class VoiceLaunchRequest(
     val tab: Int = 0,
@@ -113,6 +115,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
@@ -335,6 +338,7 @@ fun MainFeatureScreen(
     val distributionConfig by viewModel.distributionConfig.collectAsStateWithLifecycle()
     val licenseValidated by viewModel.licenseValidated.collectAsStateWithLifecycle()
     val localGuestCount by viewModel.localGuestCountForMigration.collectAsStateWithLifecycle()
+    val recipePhotoGenState by viewModel.recipePhotoGenState.collectAsStateWithLifecycle()
 
     val selectedRecipe by viewModel.selectedRecipe.collectAsState()
     val targetServings by viewModel.targetServings.collectAsState()
@@ -374,6 +378,7 @@ fun MainFeatureScreen(
             onServingsChanged = { viewModel.setTargetServings(it) },
             onBack = { viewModel.selectRecipe(null) },
             onEdit = {
+                viewModel.resetRecipePhotoGenState()
                 recipeFormTarget = selectedRecipe
                 showRecipeForm = true
             },
@@ -508,6 +513,7 @@ fun MainFeatureScreen(
                             pantryItems = pantryItems,
                             onSelectRecipe = { recipe -> viewModel.selectRecipe(recipe) },
                             onAddNewRecipe = {
+                                viewModel.resetRecipePhotoGenState()
                                 recipeFormTarget = null
                                 showRecipeForm = true
                             },
@@ -546,7 +552,17 @@ fun MainFeatureScreen(
     if (showRecipeForm) {
         RecipeFormDialog(
             initialRecipe = recipeFormTarget,
-            onDismiss = { showRecipeForm = false },
+            photoGenState = recipePhotoGenState,
+            onGenerateAiPhoto = { title, category, ingredients ->
+                viewModel.generateRecipePhoto(title, category, ingredients)
+            },
+            onResetPhotoGenState = {
+                viewModel.resetRecipePhotoGenState()
+            },
+            onDismiss = {
+                viewModel.resetRecipePhotoGenState()
+                showRecipeForm = false
+            },
             onSave = { recipe -> viewModel.saveRecipe(recipe) }
         )
     }

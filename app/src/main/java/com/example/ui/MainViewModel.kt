@@ -4,10 +4,13 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.R
+import com.example.ai.RecipePhotoGenState
+import com.example.ai.RecipePhotoGenerator
 import com.example.data.model.DistributionConfig
 import com.example.data.model.PantryItem
 import com.example.data.model.ProductionLog
 import com.example.data.model.Recipe
+import com.example.data.model.RecipeIngredient
 import com.example.data.model.ShoppingItem
 import com.example.data.repository.CookingRepository
 import com.example.data.sync.FullBackupManager
@@ -67,6 +70,34 @@ class MainViewModel(
 
     private val _localGuestCountForMigration = MutableStateFlow(0)
     val localGuestCountForMigration: StateFlow<Int> = _localGuestCountForMigration.asStateFlow()
+
+    private val _recipePhotoGenState = MutableStateFlow<RecipePhotoGenState>(RecipePhotoGenState.Idle)
+    val recipePhotoGenState: StateFlow<RecipePhotoGenState> = _recipePhotoGenState.asStateFlow()
+
+    fun generateRecipePhoto(
+        title: String,
+        category: String,
+        ingredients: List<RecipeIngredient>
+    ) {
+        if (_recipePhotoGenState.value is RecipePhotoGenState.Generating) return
+        viewModelScope.launch {
+            _recipePhotoGenState.value = RecipePhotoGenState.Generating
+            val res = RecipePhotoGenerator.generateRealisticRecipePhoto(
+                context = repository.context,
+                title = title,
+                category = category,
+                ingredients = ingredients
+            )
+            _recipePhotoGenState.value = res.fold(
+                onSuccess = { RecipePhotoGenState.Success(it) },
+                onFailure = { RecipePhotoGenState.Error(it.localizedMessage ?: str(R.string.recipe_photo_ai_failed)) }
+            )
+        }
+    }
+
+    fun resetRecipePhotoGenState() {
+        _recipePhotoGenState.value = RecipePhotoGenState.Idle
+    }
 
     init {
         viewModelScope.launch {

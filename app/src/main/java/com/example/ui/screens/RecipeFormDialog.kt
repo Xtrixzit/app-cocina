@@ -1,14 +1,20 @@
 package com.example.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +24,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,28 +35,38 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subject
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -61,9 +79,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -71,6 +92,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.ai.RecipePhotoGenState
 import com.example.data.model.Recipe
 import com.example.data.model.RecipeIngredient
 import com.example.settings.AppSettingsPreferences
@@ -81,16 +103,18 @@ import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItPeach
-import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RecipeFormDialog(
     initialRecipe: Recipe? = null,
+    photoGenState: RecipePhotoGenState = RecipePhotoGenState.Idle,
+    onGenerateAiPhoto: (title: String, category: String, ingredients: List<RecipeIngredient>) -> Unit = { _, _, _ -> },
+    onResetPhotoGenState: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (Recipe) -> Unit
 ) {
@@ -106,6 +130,14 @@ fun RecipeFormDialog(
     var difficulty by remember { mutableStateOf(initialRecipe?.difficulty ?: "Fácil") }
     var notes by remember { mutableStateOf(initialRecipe?.notes ?: "") }
     var imageUrl by remember { mutableStateOf(initialRecipe?.imageUrl ?: "") }
+    var showUrlPhotoDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(photoGenState) {
+        if (photoGenState is RecipePhotoGenState.Success) {
+            imageUrl = photoGenState.dataUri
+            onResetPhotoGenState()
+        }
+    }
 
     var instructionsMode by remember { mutableIntStateOf(0) }
     var freeTextInstructions by remember {
@@ -136,6 +168,7 @@ fun RecipeFormDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
+            onResetPhotoGenState()
             val savedPath = ImageUtils.saveImageLocally(context, uri)
             imageUrl = savedPath
         }
@@ -242,97 +275,272 @@ fun RecipeFormDialog(
                             )
 
                             if (imageUrl.isNotBlank()) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    PostItButton(
-                                        text = stringResource(R.string.action_change),
-                                        icon = Icons.Default.AddPhotoAlternate,
-                                        onClick = {
-                                            photoPickerLauncher.launch(
-                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                            )
-                                        },
-                                        backgroundColor = PostItSky,
-                                        fontSize = 16.sp
+                                IconButton(
+                                    onClick = {
+                                        onResetPhotoGenState()
+                                        imageUrl = ""
+                                    },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .testTag("recipe_form_remove_photo")
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.recipe_form_photo_remove_cd),
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
                                     )
-                                    IconButton(
-                                        onClick = { imageUrl = "" },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = stringResource(R.string.recipe_form_photo_remove_cd),
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        if (imageUrl.isNotBlank()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AsyncImage(
-                                    model = ImageUtils.toImageModel(imageUrl),
-                                    contentDescription = stringResource(R.string.recipe_detail_photo_cd, title),
-                                    contentScale = ContentScale.Crop,
+                        when {
+                            photoGenState is RecipePhotoGenState.Generating -> {
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(200.dp)
+                                        .height(180.dp)
                                         .clip(RoundedCornerShape(8.dp))
-                                )
-                            }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(130.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .sketchedBorder(
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                        strokeWidthDp = 1.8f
-                                    )
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                    .clickable {
-                                        photoPickerLauncher.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        .sketchedBorder(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                        .testTag("recipe_form_photo_ai_loading"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(16.dp)
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = stringResource(R.string.recipe_form_photo_ai_loading),
+                                            fontFamily = PatrickHandFontFamily,
+                                            fontSize = 15.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            textAlign = TextAlign.Center
                                         )
                                     }
-                                    .testTag("recipe_form_pick_photo"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
+                                }
+                            }
+
+                            imageUrl.isNotBlank() -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                        .testTag("recipe_form_photo_preview"),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AddPhotoAlternate,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(42.dp),
-                                        tint = MaterialTheme.colorScheme.primary
+                                    AsyncImage(
+                                        model = ImageUtils.toImageModel(imageUrl),
+                                        contentDescription = stringResource(R.string.recipe_detail_photo_cd, title),
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(200.dp)
+                                            .clip(RoundedCornerShape(8.dp))
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = stringResource(R.string.recipe_form_photo_add),
-                                        fontFamily = PatrickHandFontFamily,
-                                        fontSize = 17.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
+                                }
+                            }
+
+                            else -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(124.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .sketchedBorder(
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                            strokeWidthDp = 1.8f
+                                        )
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                        .clickable {
+                                            photoPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        }
+                                        .testTag("recipe_form_pick_photo"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(horizontal = 12.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AddPhotoAlternate,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(38.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = stringResource(R.string.recipe_form_photo_add),
+                                            fontFamily = PatrickHandFontFamily,
+                                            fontSize = 16.sp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.recipe_form_photo_sub),
+                                            fontFamily = PatrickHandFontFamily,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (photoGenState is RecipePhotoGenState.Error) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("recipe_form_photo_ai_error")
+                            ) {
+                                Text(
+                                    text = photoGenState.message,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    onGenerateAiPhoto(title, category, ingredients.toList())
+                                },
+                                enabled = photoGenState !is RecipePhotoGenState.Generating,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.testTag("recipe_form_ai_photo")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.recipe_form_photo_ai_btn))
+                            }
+
+                            OutlinedButton(
+                                onClick = { showUrlPhotoDialog = true },
+                                enabled = photoGenState !is RecipePhotoGenState.Generating,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.testTag("recipe_form_web_photo")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Public,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.recipe_form_photo_web_btn))
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                     )
-                                    Text(
-                                        text = stringResource(R.string.recipe_form_photo_sub),
-                                        fontFamily = PatrickHandFontFamily,
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                },
+                                enabled = photoGenState !is RecipePhotoGenState.Generating,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.testTag("recipe_form_gallery_photo")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AddPhotoAlternate,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.recipe_form_photo_gallery_btn))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = stringResource(R.string.recipe_form_photo_refs_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            itemsIndexed(ImageUtils.referentialPhotoPresets) { index, preset ->
+                                val selected = imageUrl.trim() == preset.uriKey
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(
+                                        width = if (selected) 2.5.dp else 1.dp,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant
+                                        }
+                                    ),
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                                    },
+                                    modifier = Modifier
+                                        .width(88.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            onResetPhotoGenState()
+                                            imageUrl = preset.uriKey
+                                        }
+                                        .testTag("recipe_form_ref_$index")
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(4.dp)
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = preset.drawableResId),
+                                            contentDescription = stringResource(preset.labelResId),
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(58.dp)
+                                                .clip(RoundedCornerShape(7.dp))
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = stringResource(preset.labelResId),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -783,5 +991,105 @@ fun RecipeFormDialog(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+
+    if (showUrlPhotoDialog) {
+        var urlDraft by remember(showUrlPhotoDialog) {
+            mutableStateOf(
+                if (imageUrl.startsWith("http://", ignoreCase = true) ||
+                    imageUrl.startsWith("https://", ignoreCase = true)
+                ) imageUrl else ""
+            )
+        }
+        var urlError by remember(showUrlPhotoDialog) { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showUrlPhotoDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.recipe_form_url_dialog_title),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val trimmedTitle = title.trim()
+                            if (trimmedTitle.isBlank()) {
+                                urlError = context.getString(R.string.recipe_form_photo_need_title_web)
+                            } else {
+                                urlError = null
+                                val searchUri = Uri.parse(
+                                    "https://www.google.com/search?tbm=isch&q=${Uri.encode("$trimmedTitle receta")}"
+                                )
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, searchUri))
+                                } catch (_: ActivityNotFoundException) {
+                                    // Browser not available on device
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("recipe_form_url_web_search")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.recipe_form_url_search_btn))
+                    }
+
+                    OutlinedTextField(
+                        value = urlDraft,
+                        onValueChange = {
+                            urlDraft = it
+                            urlError = null
+                        },
+                        label = { Text(stringResource(R.string.recipe_form_url_hint)) },
+                        placeholder = { Text("https://...") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("recipe_form_url_input")
+                    )
+
+                    if (!urlError.isNullOrBlank()) {
+                        Text(
+                            text = urlError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val normalized = urlDraft.trim()
+                        if (normalized.startsWith("https://", ignoreCase = true) ||
+                            normalized.startsWith("http://", ignoreCase = true)
+                        ) {
+                            onResetPhotoGenState()
+                            imageUrl = normalized
+                            showUrlPhotoDialog = false
+                        } else {
+                            urlError = context.getString(R.string.recipe_form_url_hint)
+                        }
+                    },
+                    modifier = Modifier.testTag("recipe_form_url_apply")
+                ) {
+                    Text(stringResource(R.string.recipe_form_url_apply))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUrlPhotoDialog = false }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            }
+        )
     }
 }

@@ -44,6 +44,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import android.graphics.Bitmap
+import androidx.compose.ui.test.performTextInput
+import com.example.ai.RecipePhotoGenState
+import com.example.ai.RecipePhotoGenerator
+import com.example.ui.screens.RecipeFormDialog
+import com.example.util.ImageUtils
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -550,5 +556,74 @@ class ExampleRobolectricTest {
         )
         assertEquals("uid_123", license.assignedUid)
         assertTrue(license.active)
+    }
+
+    @Test
+    fun `imageUtils resolves referential food photos https urls and encodes compact data uri`() {
+        assertEquals(5, ImageUtils.referentialPhotoPresets.size)
+        assertEquals(
+            R.drawable.img_ref_tortilla_patatas,
+            ImageUtils.toImageModel(ImageUtils.REF_TORTILLA)
+        )
+        assertEquals(
+            R.drawable.img_ref_pasta_pollo,
+            ImageUtils.toImageModel(ImageUtils.REF_PASTA)
+        )
+        assertEquals(
+            "https://example.com/dish.jpg",
+            ImageUtils.toImageModel("https://example.com/dish.jpg")
+        )
+
+        val sampleBitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
+        val dataUri = ImageUtils.encodeBitmapToDataUri(sampleBitmap, recycleSource = true)
+        assertTrue(dataUri.startsWith("data:image/jpeg;base64,"))
+        assertTrue(dataUri.length <= 80_000)
+        assertTrue(ImageUtils.toImageModel(dataUri) is ByteArray)
+    }
+
+    @Test
+    fun `recipePhotoGenerator builds photorealistic non cartoon culinary prompt`() {
+        val prompt = RecipePhotoGenerator.buildPhotorealisticPrompt(
+            title = "Paella Valenciana",
+            category = "Almuerzos",
+            ingredients = listOf(
+                RecipeIngredient(name = "Arroz", amount = 300.0, unit = "g"),
+                RecipeIngredient(name = "Azafrán", amount = 1.0, unit = "pizca")
+            )
+        )
+        assertTrue(prompt.contains("Paella Valenciana"))
+        assertTrue(prompt.contains("Arroz"))
+        assertTrue(prompt.contains("Photorealistic DSLR food photography"))
+        assertTrue(prompt.contains("NO cartoon"))
+    }
+
+    @Test
+    fun `recipeFormDialog exposes AI Web Gallery and Referential photo controls and saves selected imageUrl`() {
+        var savedRecipe: Recipe? = null
+        composeRule.setContent {
+            MyApplicationTheme {
+                RecipeFormDialog(
+                    initialRecipe = null,
+                    photoGenState = RecipePhotoGenState.Idle,
+                    onGenerateAiPhoto = { _, _, _ -> },
+                    onDismiss = {},
+                    onSave = { savedRecipe = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("recipe_form_ai_photo").assertIsDisplayed()
+        composeRule.onNodeWithTag("recipe_form_web_photo").assertIsDisplayed()
+        composeRule.onNodeWithTag("recipe_form_gallery_photo").assertIsDisplayed()
+        composeRule.onNodeWithTag("recipe_form_ref_0").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithTag("recipe_form_title")
+            .performScrollTo()
+            .performTextInput("Arroz con Pollo")
+        composeRule.onNodeWithTag("recipe_form_save").performClick()
+
+        assertNotNull(savedRecipe)
+        assertEquals("Arroz con Pollo", savedRecipe!!.title)
+        assertEquals(ImageUtils.referentialPhotoPresets[0].uriKey, savedRecipe!!.imageUrl)
     }
 }

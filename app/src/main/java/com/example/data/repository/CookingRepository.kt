@@ -21,6 +21,7 @@ import com.example.data.util.handleFirestoreError
 import com.example.settings.AppSettingsPreferences
 import com.example.settings.CurrencyOption
 import com.example.util.AppShortcutsUpdater
+import com.example.util.ImageUtils
 import com.example.util.UnitConverter
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
@@ -945,7 +946,8 @@ class CookingRepository(
                         "Escurrir las patatas y cebolla e incorporarlas al bol de huevos batidos. Dejar reposar 5 minutos para que absorban.",
                         "En una sartén caliente con unas gotas de aceite, verter la mezcla y cuajar 2-3 minutos por cada lado dando la vuelta con un plato."
                     ),
-                    notes = "Para que quede jugosa, no cocinar en exceso el huevo al dar la vuelta."
+                    notes = "Para que quede jugosa, no cocinar en exceso el huevo al dar la vuelta.",
+                    imageUrl = ImageUtils.REF_TORTILLA
                 ),
                 Recipe(
                     title = "Pasta Cremosa con Pollo y Champiñones",
@@ -969,7 +971,8 @@ class CookingRepository(
                         "Verter la crema de leche y cocinar a fuego lento hasta espesar ligeramente.",
                         "Mezclar con la pasta escurrida y coronar con queso parmesano rallado."
                     ),
-                    notes = "Reserva media taza del agua de cocción de la pasta para aligerar la salsa si queda muy densa."
+                    notes = "Reserva media taza del agua de cocción de la pasta para aligerar la salsa si queda muy densa.",
+                    imageUrl = ImageUtils.REF_PASTA
                 ),
                 Recipe(
                     title = "Panqueques Esponjosos de Avena y Plátano",
@@ -992,7 +995,8 @@ class CookingRepository(
                         "Verter porciones de masa y cocinar 2 minutos hasta que aparezcan burbujas en la superficie.",
                         "Dar la vuelta con espátula y cocinar 1 minuto más. Servir con miel o frutas frescas."
                     ),
-                    notes = "Usa plátanos con motas marrones para que aporten dulzor natural sin necesidad de añadir azúcar."
+                    notes = "Usa plátanos con motas marrones para que aporten dulzor natural sin necesidad de añadir azúcar.",
+                    imageUrl = ImageUtils.REF_PANCAKES
                 )
             )
 
