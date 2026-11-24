@@ -4,10 +4,14 @@ import android.content.Context
 import androidx.appfunctions.AppFunctionContext
 import androidx.appfunctions.AppFunctionElementNotFoundException
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.core.app.ApplicationProvider
 import com.example.ai.RecetarioAppFunctions
@@ -52,7 +56,14 @@ import com.example.ai.ChefChatRole
 import com.example.ai.PhotoAspectOption
 import com.example.ai.RecipePhotoGenState
 import com.example.ai.RecipePhotoGenerator
+import com.example.data.sync.AiReadableExportFormatter
+import com.example.settings.DriveSyncInfo
+import com.example.ui.components.GuidedTutorialOverlay
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTextReplacement
 import com.example.ui.screens.ChefChatDialog
+import com.example.ui.screens.PantryFormDialog
+import com.example.ui.screens.ProductionScreen
 import com.example.ui.screens.RecipeFormDialog
 import com.example.util.ImageUtils
 import org.robolectric.RobolectricTestRunner
@@ -772,5 +783,439 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("chef_chat_send").performClick()
 
         assertEquals("Dame sustitutos de mantequilla", sentPrompt)
+    }
+
+    @Test
+    fun `aiReadableExportFormatter exports clean markdown html and csv without base64 blobs`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+
+        val recipes = listOf(
+            Recipe(
+                id = "r1",
+                title = "Arroz con Pollo",
+                category = "Almuerzos",
+                servings = 4,
+                prepTimeMinutes = 15,
+                cookTimeMinutes = 30,
+                difficulty = "Fácil",
+                ingredients = listOf(
+                    RecipeIngredient(name = "Arroz", amount = 400.0, unit = "g"),
+                    RecipeIngredient(name = "Pollo", amount = 500.0, unit = "g")
+                ),
+                instructions = listOf("Sofreír el pollo", "Agregar arroz y caldo"),
+                notes = "Servir caliente",
+                imageUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD"
+            )
+        )
+        val pantry = listOf(
+            PantryItem(id = "p1", name = "Arroz", category = "Granos", quantity = 100.0, unit = "g", minQuantity = 500.0),
+            PantryItem(id = "p2", name = "Azafrán", category = "Especias", quantity = 0.0, unit = "g", minQuantity = 5.0)
+        )
+        val shopping = listOf(
+            ShoppingItem(id = "s1", name = "Pollo, muslos", category = "Carnes", quantity = 1.0, unit = "kg", isPurchased = false, recipeSource = "Arroz con Pollo")
+        )
+        val logs = listOf(
+            ProductionLog(id = "l1", recipeId = "r1", recipeTitle = "Arroz con Pollo", targetServings = 8, scaleFactor = 2.0, totalCost = 12.0, currencyCode = "USD", marginPercent = 30, suggestedPrice = 15.6)
+        )
+
+        val md = AiReadableExportFormatter.exportToMarkdown(
+            context = context,
+            recipes = recipes,
+            pantry = pantry,
+            shopping = shopping,
+            productionLogs = logs,
+            currencyCode = "USD",
+            marginPercent = 30
+        )
+        assertTrue(md.contains("# Recetario"))
+        assertTrue(md.contains("**Arroz**: 100 g [STOCK BAJO]"))
+        assertTrue(md.contains("**Azafrán**: 0 g [AGOTADO]"))
+        assertTrue(md.contains("Arroz con Pollo"))
+        assertTrue(md.contains("Sofreír el pollo"))
+        assertFalse(md.contains("data:image/jpeg;base64"))
+
+        val html = AiReadableExportFormatter.exportToGoogleDocHtml(
+            context = context,
+            recipes = recipes,
+            pantry = pantry,
+            shopping = shopping,
+            productionLogs = logs,
+            currencyCode = "USD",
+            marginPercent = 30
+        )
+        assertTrue(html.contains("<!DOCTYPE html>"))
+        assertTrue(html.contains("<table>"))
+        assertTrue(html.contains("<b>Arroz</b>"))
+        assertFalse(html.contains("data:image/jpeg;base64"))
+
+        val csv = AiReadableExportFormatter.exportToCsv(
+            context = context,
+            recipes = recipes,
+            pantry = pantry,
+            shopping = shopping
+        )
+        assertTrue(csv.startsWith("\uFEFF"))
+        assertTrue(csv.contains("Despensa,Granos,Arroz,100"))
+        assertTrue(csv.contains("\"Pollo, muslos\""))
+        assertTrue(csv.contains("Receta,Almuerzos,Arroz con Pollo,4"))
+
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `appSettingsPreferences persists and clears DriveSyncInfo metadata`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.clearDriveSyncInfo(context)
+        assertEquals(0L, AppSettingsPreferences.getDriveSyncInfo(context).lastSyncMillis)
+
+        val sampleInfo = DriveSyncInfo(
+            autoSyncEnabled = false,
+            lastSyncMillis = 1_750_000_000_000L,
+            folderId = "folder_1",
+            docFileId = "doc_1",
+            docWebLink = "https://docs.google.com/document/d/doc_1",
+            sheetFileId = "sheet_1",
+            sheetWebLink = "https://docs.google.com/spreadsheets/d/sheet_1",
+            markdownFileId = "md_1",
+            markdownWebLink = "https://drive.google.com/file/d/md_1",
+            linkedEmail = "chef@example.com"
+        )
+        AppSettingsPreferences.saveDriveSyncInfo(context, sampleInfo)
+        val restored = AppSettingsPreferences.getDriveSyncInfo(context)
+        assertEquals(false, restored.autoSyncEnabled)
+        assertEquals("doc_1", restored.docFileId)
+        assertEquals("https://docs.google.com/document/d/doc_1", restored.docWebLink)
+
+        AppSettingsPreferences.setDriveAutoSyncEnabled(context, true)
+        assertTrue(AppSettingsPreferences.getDriveSyncInfo(context).autoSyncEnabled)
+
+        AppSettingsPreferences.clearDriveSyncInfo(context)
+        assertEquals("", AppSettingsPreferences.getDriveSyncInfo(context).docFileId)
+    }
+
+    @Test
+    fun `cookingAssistantScreen exposes Google Drive AI sync card and format actions`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        SessionPreferences.setGuestMode(context, true)
+        AppSettingsPreferences.saveDriveSyncInfo(
+            context,
+            DriveSyncInfo(
+                autoSyncEnabled = true,
+                lastSyncMillis = 1_750_000_000_000L,
+                docFileId = "doc_1",
+                docWebLink = "https://docs.google.com/document/d/doc_1",
+                sheetFileId = "sheet_1",
+                sheetWebLink = "https://docs.google.com/spreadsheets/d/sheet_1"
+            )
+        )
+
+        val viewModel = MainViewModel(
+            repository = CookingRepository(context),
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                CookingAssistantScreen(
+                    viewModel = viewModel,
+                    recipes = emptyList(),
+                    pantryItems = emptyList(),
+                    onSelectRecipe = {}
+                )
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("cooking_assistant_list")
+            .performScrollToNode(hasTestTag("drive_ai_sync_card"))
+        composeRule.onNodeWithTag("drive_ai_sync_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_sync_now_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_auto_sync_switch").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_open_doc_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_copy_link_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_share_ai_text_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_export_md_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_export_csv_button").performScrollTo().assertIsDisplayed()
+
+        AppSettingsPreferences.clearDriveSyncInfo(context)
+        SessionPreferences.setGuestMode(context, false)
+    }
+
+    @Test
+    fun `appSettingsPreferences persists and resets guided tutorial completion`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setGuidedTutorialCompleted(context, false)
+        assertFalse(AppSettingsPreferences.isGuidedTutorialCompleted(context))
+
+        AppSettingsPreferences.setGuidedTutorialCompleted(context, true)
+        assertTrue(AppSettingsPreferences.isGuidedTutorialCompleted(context))
+
+        AppSettingsPreferences.setGuidedTutorialCompleted(context, false)
+        assertFalse(AppSettingsPreferences.isGuidedTutorialCompleted(context))
+    }
+
+    @Test
+    fun `guidedTutorialOverlay forces sequential confirmation across all 8 steps and switches tabs`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        val switchedTabs = mutableListOf<Int>()
+        var completed = false
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                GuidedTutorialOverlay(
+                    onSwitchTab = { switchedTabs.add(it) },
+                    onCompleted = { completed = true }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("guided_tutorial_overlay").assertIsDisplayed()
+
+        // Step 1..7 -> must check confirmation box before next unlocks
+        for (step in 1..7) {
+            composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+            composeRule.onNodeWithTag("tutorial_confirm_step_checkbox").performClick()
+            composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+            assertFalse(completed)
+        }
+
+        // Step 8 -> confirm unlocks Finish button
+        composeRule.onNodeWithTag("tutorial_finish_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_confirm_step_checkbox").performClick()
+        composeRule.onNodeWithTag("tutorial_finish_button").assertIsEnabled().performClick()
+
+        assertTrue(completed)
+        assertEquals(listOf(0, 0, 0, 1, 2, 3, 4, 4), switchedTabs)
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `gemini error classifiers and image scaling produce clear diagnostics and compact bitmaps`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        val loc = LocaleHelper.localizedContext(context)
+
+        val appCheckMsg = ChefChatRepository.classifyGeminiError(loc, IllegalStateException("HTTP 403 App Check token rejected"))
+        assertTrue(appCheckMsg.contains("App Check"))
+
+        val quotaMsg = ChefChatRepository.classifyGeminiError(loc, IllegalStateException("429 RESOURCE_EXHAUSTED quota"))
+        assertTrue(quotaMsg.contains("Cuota") || quotaMsg.contains("Chef Práctico"))
+
+        val photoQuotaMsg = RecipePhotoGenerator.classifyPhotoError(loc, IllegalStateException("Blaze billing required for image generation"))
+        assertTrue(photoQuotaMsg.contains("Blaze"))
+
+        val offlineMsg = RecipePhotoGenerator.classifyPhotoError(loc, java.io.IOException("Unable to resolve host"))
+        assertTrue(offlineMsg.contains("conexión"))
+
+        val bigBitmap = Bitmap.createBitmap(1600, 800, Bitmap.Config.ARGB_8888)
+        val scaled = ImageUtils.scaleBitmapMaxDimension(bigBitmap, 640)
+        assertEquals(640, scaled.width)
+        assertEquals(320, scaled.height)
+        bigBitmap.recycle()
+        scaled.recycle()
+
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `unitConverter parses regional commas formats decimals converts cost per unit and sums mass volume`() {
+        assertEquals(1.5, UnitConverter.parseDecimal("1,5")!!, 0.0001)
+        assertEquals(1250.75, UnitConverter.parseDecimal("1,250.75")!!, 0.0001)
+        assertEquals(1250.5, UnitConverter.parseDecimal("1.250,50")!!, 0.0001)
+        assertEquals(0.005, UnitConverter.parseDecimal(" 0,005 ")!!, 0.00001)
+
+        assertEquals("1.25", UnitConverter.formatQuantity(1.25))
+        assertEquals("0.005", UnitConverter.formatQuantity(0.005))
+        assertEquals("2", UnitConverter.formatQuantity(2.0))
+
+        // Mass & volume conversions
+        assertEquals(453.59237, UnitConverter.convert(1.0, "lb", "g")!!, 0.01)
+        assertEquals(2.0, UnitConverter.convert(24.0, "unidades", "docenas")!!, 0.001)
+        assertEquals(1000.0, UnitConverter.convert(1.0, "l", "ml")!!, 0.001)
+
+        // Cost conversions: $4.00/kg -> $0.004/g
+        assertEquals(0.004, UnitConverter.convertCostPerUnit(4.0, "kg", "g")!!, 0.00001)
+
+        // Pantry batch breakdown: paid $9.00 for 2 kg of a pantry item stored in g -> 2000 g base, $0.0045/g
+        val batch = UnitConverter.computePantryCostBreakdown(
+            enteredPrice = 9.0,
+            enteredBaseQty = 2.0,
+            priceInputUnit = "kg",
+            itemUnit = "g",
+            isPerSingleUnitMode = false
+        )
+        assertEquals(2000.0, batch.baseQuantityInItemUnit, 0.001)
+        assertEquals(0.0045, batch.unitCostInItemUnit, 0.00001)
+
+        // Per-single-unit breakdown: $5.00 per 1 kg -> 1000 g base, $0.005/g
+        val singleUnit = UnitConverter.computePantryCostBreakdown(
+            enteredPrice = 5.0,
+            enteredBaseQty = 999.0,
+            priceInputUnit = "kg",
+            itemUnit = "g",
+            isPerSingleUnitMode = true
+        )
+        assertEquals(1000.0, singleUnit.baseQuantityInItemUnit, 0.001)
+        assertEquals(0.005, singleUnit.unitCostInItemUnit, 0.00001)
+
+        // Human equivalent & macro cost reference
+        assertEquals(1.5 to "kg", UnitConverter.humanEquivalent(1500.0, "g"))
+        assertEquals(4.0 to "kg", UnitConverter.macroUnitCostReference(0.004, "g"))
+
+        // Batch mass/volume sums
+        val (grams, ml) = UnitConverter.sumMassAndVolume(
+            listOf(500.0 to "g", 1.5 to "kg", 250.0 to "ml", 1.0 to "l")
+        )
+        assertEquals(2000.0, grams, 0.01)
+        assertEquals(1250.0, ml, 0.01)
+    }
+
+    @Test
+    fun `cookingRepository syncs shopping to pantry across kg and g and preserves 4 decimal precision`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        FirebaseAuth.getInstance().signOut()
+        SessionPreferences.setGuestMode(context, true)
+
+        val db = CookingDatabase.resetDatabase(context)
+        db.pantryDao().insertOrUpdate(
+            PantryEntity.fromDomain(
+                PantryItem(
+                    id = "p_flour",
+                    userId = CookingRepository.GUEST_USER_ID,
+                    name = "Harina",
+                    quantity = 1.0,
+                    unit = "kg"
+                )
+            )
+        )
+        val repo = CookingRepository(context)
+
+        // Subtracting 5 g (0.005 kg) should yield 0.995 kg, not 1.00 kg
+        repo.updatePantryStock(
+            userId = CookingRepository.GUEST_USER_ID,
+            itemId = "p_flour",
+            newQuantity = 1.0 - 0.005,
+            isGuestMode = true
+        )
+        assertEquals(0.995, db.pantryDao().getAllPantryItemsList().first { it.id == "p_flour" }.quantity, 0.0001)
+
+        // Saving purchased shopping item in g must convert into pantry kg
+        repo.saveShoppingItem(
+            userId = CookingRepository.GUEST_USER_ID,
+            item = ShoppingItem(
+                id = "s_flour",
+                userId = CookingRepository.GUEST_USER_ID,
+                name = "Harina",
+                quantity = 500.0,
+                unit = "g",
+                isPurchased = true
+            ),
+            isGuestMode = true,
+            syncToPantry = true
+        )
+        assertEquals(0.5, db.pantryDao().getAllPantryItemsList().first { it.id == "p_flour" }.quantity, 0.0001)
+
+        // Updating shopping item to 750 g must convert to 0.75 kg on pantry
+        repo.updateShoppingItemQuantity(
+            userId = CookingRepository.GUEST_USER_ID,
+            itemId = "s_flour",
+            newQuantity = 750.0,
+            isGuestMode = true,
+            itemName = "Harina",
+            itemUnit = "g"
+        )
+        assertEquals(0.75, db.pantryDao().getAllPantryItemsList().first { it.id == "p_flour" }.quantity, 0.0001)
+
+        SessionPreferences.setGuestMode(context, false)
+    }
+
+    @Test
+    fun `pantryFormDialog supports comma decimals and converts batch kg pricing into per gram unit cost`() {
+        var savedItem: PantryItem? = null
+        composeRule.setContent {
+            MyApplicationTheme {
+                PantryFormDialog(
+                    initialItem = null,
+                    onDismiss = {},
+                    onSave = { savedItem = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("pantry_form_name").performTextInput("Azúcar")
+        composeRule.onNodeWithTag("pantry_form_qty").performTextReplacement("1500")
+        composeRule.onNodeWithTag("pantry_form_cost").performTextReplacement("6,00")
+        composeRule.onNodeWithTag("pantry_form_cost_base")
+            .performScrollTo()
+            .performTextReplacement("1,5")
+        composeRule.onNodeWithTag("pantry_form_unit_cost_preview")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("pantry_form_save").performClick()
+
+        assertNotNull(savedItem)
+        assertEquals("Azúcar", savedItem!!.name)
+        assertEquals(1500.0, savedItem!!.quantity, 0.001)
+        assertEquals(6.0, savedItem!!.cost, 0.001)
+        assertEquals(1500.0, savedItem!!.costBaseQuantity, 0.001)
+        assertEquals(0.004, savedItem!!.unitCost, 0.00001)
+    }
+
+    @Test
+    fun `productionScreen scales by compatible key ingredient unit and calculates per portion and per kg prices`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        AppSettingsPreferences.setCurrency(context, CurrencyOption.USD)
+        AppSettingsPreferences.setMarginPercent(context, 30)
+        SessionPreferences.setGuestMode(context, true)
+
+        val viewModel = MainViewModel(
+            repository = CookingRepository(context),
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+        val recipe = Recipe(
+            id = "r_bread",
+            title = "Pan Casero",
+            servings = 4,
+            ingredients = listOf(
+                RecipeIngredient(name = "Harina", amount = 250.0, unit = "g", manualUnitCost = 0.004),
+                RecipeIngredient(name = "Agua", amount = 150.0, unit = "ml")
+            )
+        )
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                ProductionScreen(
+                    viewModel = viewModel,
+                    recipes = listOf(recipe),
+                    pantryItems = emptyList(),
+                    initialSelectedRecipe = recipe
+                )
+            }
+        }
+
+        // Default: 1x -> 250 g Harina * $0.004/g = $1.00, 4 portions -> $0.25/portion, +30% = $1.30 ($0.33/portion approx)
+        composeRule.onNodeWithText("250 g").assertIsDisplayed()
+        composeRule.onNodeWithTag("production_servings_input").performTextReplacement("8")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("500 g").assertIsDisplayed()
+
+        AppSettingsPreferences.setLanguageCode(context, "")
+        SessionPreferences.setGuestMode(context, false)
     }
 }

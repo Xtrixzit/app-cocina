@@ -49,16 +49,19 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.ShoppingItem
+import com.example.settings.AppSettingsPreferences
+import com.example.settings.CurrencyOption
 import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.StockGreen
 import com.example.util.LocalizedLabels
-import java.util.Locale
+import com.example.util.UnitConverter
 
 @Composable
 fun ShoppingItemCard(
     item: ShoppingItem,
     pantryItem: PantryItem? = null,
+    currency: CurrencyOption = CurrencyOption.USD,
     onTogglePurchased: (Boolean) -> Unit,
     onAdjustQuantity: (Double) -> Unit,
     onEdit: () -> Unit,
@@ -77,19 +80,15 @@ fun ShoppingItemCard(
         label = "shoppingCardColor"
     )
 
-    val formattedQty = if (item.quantity % 1.0 == 0.0) {
-        item.quantity.toInt().toString()
-    } else {
-        String.format(Locale.US, "%.1f", item.quantity)
-    }
+    val formattedQty = UnitConverter.formatQuantity(item.quantity)
+    val equivHint = UnitConverter.humanEquivalent(item.quantity, item.unit)
 
     val displayUnit = LocalizedLabels.unit(context, item.unit)
 
-    val step = when (item.unit.lowercase()) {
-        "g", "ml" -> 50.0
-        "kg", "l" -> 0.5
-        else -> 1.0
-    }
+    val step = UnitConverter.quickAdjustStep(item.quantity, item.unit)
+
+    val estimatedRate = UnitConverter.unitCostInTargetUnit(pantryItem, item.unit)
+    val estimatedCost = if (estimatedRate > 0.0) estimatedRate * item.quantity else 0.0
 
     Card(
         modifier = modifier
@@ -220,15 +219,40 @@ fun ShoppingItemCard(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
+                            if (equivHint != null) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "(" + stringResource(
+                                        R.string.recipe_detail_equiv_stock,
+                                        UnitConverter.formatQuantity(equivHint.first),
+                                        LocalizedLabels.unit(context, equivHint.second)
+                                    ) + ")",
+                                    fontFamily = PatrickHandFontFamily,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
+                    if (estimatedCost > 0.0) {
+                        Text(
+                            text = stringResource(
+                                R.string.shopping_item_est_cost,
+                                AppSettingsPreferences.formatMoney(estimatedCost, currency)
+                            ),
+                            fontFamily = PatrickHandFontFamily,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier
+                                .padding(start = 2.dp, top = 2.dp)
+                                .testTag("shopping_item_est_cost_${item.id}")
+                        )
+                    }
+
                     if (pantryItem != null) {
-                        val pQty = if (pantryItem.quantity % 1.0 == 0.0) {
-                            pantryItem.quantity.toInt().toString()
-                        } else {
-                            String.format(Locale.US, "%.1f", pantryItem.quantity)
-                        }
+                        val pQty = UnitConverter.formatQuantity(pantryItem.quantity)
                         Text(
                             text = stringResource(
                                 R.string.shopping_in_pantry_pill,

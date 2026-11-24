@@ -52,9 +52,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.ShoppingItem
+import com.example.settings.AppSettingsPreferences
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
 import com.example.ui.components.PostItButton
@@ -70,6 +72,7 @@ import com.example.ui.theme.PostItPink
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.util.LocalizedLabels
+import com.example.util.UnitConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +81,7 @@ fun ShoppingListScreen(
     pantryItems: List<PantryItem>
 ) {
     val context = LocalContext.current
+    val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
     val shoppingUiState by viewModel.shoppingState.collectAsState()
 
     var newItemName by remember { mutableStateOf("") }
@@ -88,11 +92,11 @@ fun ShoppingListScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var editingItem by remember { mutableStateOf<ShoppingItem?>(null) }
 
-    val commonUnits = listOf("unidades", "kg", "g", "l", "ml", "paquetes", "latas", "piezas", "docenas")
+    val commonUnits = UnitConverter.allShoppingUnits
 
     val onAddItem = {
         if (newItemName.isNotBlank()) {
-            val qty = newItemQty.toDoubleOrNull() ?: 1.0
+            val qty = UnitConverter.parseDecimal(newItemQty) ?: 1.0
             viewModel.saveShoppingItem(
                 ShoppingItem(
                     name = newItemName.trim(),
@@ -367,6 +371,35 @@ fun ShoppingListScreen(
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            val totalEstCost = allItems.sumOf { item ->
+                                val match = pantryItems.find { it.name.trim().equals(item.name.trim(), ignoreCase = true) }
+                                val rate = UnitConverter.unitCostInTargetUnit(match, item.unit)
+                                if (rate > 0.0) rate * item.quantity else 0.0
+                            }
+                            val pendingEstCost = pendingItems.sumOf { item ->
+                                val match = pantryItems.find { it.name.trim().equals(item.name.trim(), ignoreCase = true) }
+                                val rate = UnitConverter.unitCostInTargetUnit(match, item.unit)
+                                if (rate > 0.0) rate * item.quantity else 0.0
+                            }
+                            if (totalEstCost > 0.0) {
+                                item {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.shopping_est_total_label,
+                                            AppSettingsPreferences.formatMoney(totalEstCost, currency),
+                                            AppSettingsPreferences.formatMoney(pendingEstCost, currency)
+                                        ),
+                                        fontFamily = PatrickHandFontFamily,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier
+                                            .padding(bottom = 2.dp)
+                                            .testTag("shopping_est_total_summary")
+                                    )
+                                }
+                            }
+
                             if (purchasedItems.isNotEmpty() && selectedTab != 2) {
                                 item {
                                     Row(
@@ -400,6 +433,7 @@ fun ShoppingListScreen(
                                 ShoppingItemCard(
                                     item = item,
                                     pantryItem = matchingPantry,
+                                    currency = currency,
                                     onTogglePurchased = { isChecked ->
                                         viewModel.toggleShoppingItem(item.id, isChecked)
                                     },

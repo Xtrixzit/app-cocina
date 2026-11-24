@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -76,6 +77,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.ai.ChefChatMessage
+import com.example.ai.ChefChatRepository
 import com.example.ai.ChefChatRole
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
@@ -84,6 +86,8 @@ import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItYellow
 import com.example.util.ImageUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -215,6 +219,7 @@ fun ChefChatDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .navigationBarsPadding()
                     .imePadding()
                     .notebookPaperBackground()
             ) {

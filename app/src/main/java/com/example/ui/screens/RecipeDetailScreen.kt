@@ -35,18 +35,24 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -119,6 +125,8 @@ fun RecipeDetailScreen(
     val marginPercent by AppSettingsPreferences.observeMarginPercent(context).collectAsStateWithLifecycle()
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showCustomServingsDialog by remember { mutableStateOf(false) }
+    var customServingsInput by remember { mutableStateOf(targetServings.toString()) }
     var activeTimerMinutes by remember { mutableStateOf<Int?>(null) }
     var activeTimerLabel by remember { mutableStateOf("") }
     var editingCostIngredientIndex by remember { mutableStateOf<Int?>(null) }
@@ -453,9 +461,10 @@ fun RecipeDetailScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         listOf(
                             stringResource(R.string.recipe_detail_preset_base, recipe.servings) to recipe.servings,
@@ -468,6 +477,21 @@ fun RecipeDetailScreen(
                                 onClick = { onServingsChanged(value) },
                                 text = label,
                                 selectedColor = PostItPeach
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                customServingsInput = targetServings.toString()
+                                showCustomServingsDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.testTag("recipe_detail_custom_servings_btn")
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.recipe_detail_custom_servings_btn),
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                     }
@@ -723,25 +747,50 @@ fun RecipeDetailScreen(
                                     stringResource(R.string.recipe_detail_stock_missing)
                                 }
 
+                                val equivSuffix = if (inStockItem != null &&
+                                    !inStockItem.unit.trim().equals(ingredient.unit.trim(), ignoreCase = true) &&
+                                    convertedStock > 0.0
+                                ) {
+                                    " (" + stringResource(
+                                        R.string.recipe_detail_equiv_stock,
+                                        formatQty(convertedStock),
+                                        displayRecipeUnit
+                                    ) + ")"
+                                } else ""
+
                                 Text(
-                                    text = stockText,
+                                    text = stockText + equivSuffix,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (isSufficient) StockGreen else StockRed,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
 
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Text(
-                                    text = "$formattedScaled $displayRecipeUnit",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = "$formattedScaled $displayRecipeUnit",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                                UnitConverter.humanEquivalent(scaledAmount, ingredient.unit)?.let { (eqAmt, eqUnit) ->
+                                    Text(
+                                        text = stringResource(
+                                            R.string.recipe_detail_equiv_stock,
+                                            formatQty(eqAmt),
+                                            LocalizedLabels.unit(context, eqUnit)
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -917,11 +966,81 @@ fun RecipeDetailScreen(
         )
     }
 
+    if (showCustomServingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showCustomServingsDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.recipe_detail_custom_servings_title),
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = customServingsInput,
+                    onValueChange = { customServingsInput = it },
+                    label = { Text(stringResource(R.string.recipe_detail_custom_servings_label)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("recipe_detail_custom_servings_input")
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val parsed = customServingsInput.trim().toIntOrNull()
+                        if (parsed != null && parsed in 1..500) {
+                            onServingsChanged(parsed)
+                        }
+                        showCustomServingsDialog = false
+                    },
+                    modifier = Modifier.testTag("recipe_detail_custom_servings_apply")
+                ) {
+                    Text(stringResource(R.string.action_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomServingsDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     if (editingCostIngredientIndex != null) {
         val idx = editingCostIngredientIndex!!
         val targetIngredient = recipe.ingredients.getOrNull(idx)
         if (targetIngredient != null) {
             val unitLabel = LocalizedLabels.unit(context, targetIngredient.unit)
+            var showBatchHelper by remember(idx) { mutableStateOf(false) }
+            var batchPaidText by remember(idx) { mutableStateOf("") }
+            var batchQtyText by remember(idx) { mutableStateOf("1") }
+            var batchUnit by remember(idx) {
+                mutableStateOf(
+                    UnitConverter.compatibleUnitsFor(targetIngredient.unit).let { compat ->
+                        if ("kg" in compat) "kg" else if ("l" in compat) "l" else targetIngredient.unit
+                    }
+                )
+            }
+            var batchUnitExpanded by remember(idx) { mutableStateOf(false) }
+
+            fun recalcFromBatch(paidStr: String, qtyStr: String, bUnit: String) {
+                val paid = UnitConverter.parseDecimal(paidStr) ?: 0.0
+                val qty = UnitConverter.parseDecimal(qtyStr) ?: 0.0
+                if (paid > 0.0 && qty > 0.0) {
+                    val breakdown = UnitConverter.computePantryCostBreakdown(
+                        enteredPrice = paid,
+                        enteredBaseQty = qty,
+                        priceInputUnit = bUnit,
+                        itemUnit = targetIngredient.unit,
+                        isPerSingleUnitMode = false
+                    )
+                    manualCostInputText = UnitConverter.formatQuantity(breakdown.unitCostInItemUnit, maxDecimals = 5)
+                }
+            }
+
             AlertDialog(
                 onDismissRequest = { editingCostIngredientIndex = null },
                 title = {
@@ -943,19 +1062,93 @@ fun RecipeDetailScreen(
                             placeholder = { Text(stringResource(R.string.recipe_detail_manual_cost_hint)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("recipe_detail_manual_cost_input")
                         )
+                        TextButton(
+                            onClick = { showBatchHelper = !showBatchHelper },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                            modifier = Modifier.testTag("recipe_detail_batch_helper_toggle")
+                        ) {
+                            Text(
+                                text = stringResource(R.string.recipe_form_batch_helper_toggle),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (showBatchHelper) {
+                            val compatUnits = UnitConverter.compatibleUnitsFor(targetIngredient.unit)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = batchPaidText,
+                                    onValueChange = {
+                                        batchPaidText = it
+                                        recalcFromBatch(it, batchQtyText, batchUnit)
+                                    },
+                                    label = { Text(stringResource(R.string.recipe_form_batch_paid_label, currency.symbol)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = batchQtyText,
+                                    onValueChange = {
+                                        batchQtyText = it
+                                        recalcFromBatch(batchPaidText, it, batchUnit)
+                                    },
+                                    label = { Text(stringResource(R.string.recipe_form_batch_qty_label)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(0.75f),
+                                    singleLine = true
+                                )
+                                ExposedDropdownMenuBox(
+                                    expanded = batchUnitExpanded,
+                                    onExpandedChange = { batchUnitExpanded = it },
+                                    modifier = Modifier.weight(0.9f)
+                                ) {
+                                    OutlinedTextField(
+                                        value = LocalizedLabels.unit(context, batchUnit),
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text(stringResource(R.string.recipe_form_batch_unit_label)) },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = batchUnitExpanded) },
+                                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true),
+                                        singleLine = true
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = batchUnitExpanded,
+                                        onDismissRequest = { batchUnitExpanded = false }
+                                    ) {
+                                        compatUnits.forEach { cu ->
+                                            DropdownMenuItem(
+                                                text = { Text(LocalizedLabels.unit(context, cu)) },
+                                                onClick = {
+                                                    batchUnit = cu
+                                                    batchUnitExpanded = false
+                                                    recalcFromBatch(batchPaidText, batchQtyText, cu)
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            val newCost = manualCostInputText.toDoubleOrNull() ?: 0.0
+                            val newCost = UnitConverter.parseDecimal(manualCostInputText) ?: 0.0
                             val updatedIngredients = recipe.ingredients.toMutableList()
                             updatedIngredients[idx] = targetIngredient.copy(manualUnitCost = newCost)
                             onUpdateRecipe(recipe.copy(ingredients = updatedIngredients))
                             editingCostIngredientIndex = null
-                        }
+                        },
+                        modifier = Modifier.testTag("recipe_detail_manual_cost_save")
                     ) {
                         Text(stringResource(R.string.recipe_detail_manual_cost_save))
                     }
@@ -970,10 +1163,4 @@ fun RecipeDetailScreen(
     }
 }
 
-private fun formatQty(value: Double): String {
-    return if (value % 1.0 == 0.0) {
-        value.toInt().toString()
-    } else {
-        String.format(Locale.US, "%.1f", value)
-    }
-}
+private fun formatQty(value: Double): String = UnitConverter.formatQuantity(value)

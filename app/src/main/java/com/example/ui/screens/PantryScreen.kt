@@ -69,6 +69,7 @@ import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItPeach
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
+import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
 import com.example.util.LocalizedLabels
@@ -273,6 +274,7 @@ fun PantryScreen(
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 val restockSource = stringResource(R.string.pantry_restock_source)
+                                val totalInventoryValue = allItems.sumOf { it.quantity * it.unitCost }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,6 +284,13 @@ fun PantryScreen(
                                         MetricPill(label = stringResource(R.string.pantry_metric_total), value = "${allItems.size}", color = MaterialTheme.colorScheme.primary)
                                         MetricPill(label = stringResource(R.string.pantry_metric_low), value = "${lowStockItems.size - outOfStockItems.size}", color = StockYellow)
                                         MetricPill(label = stringResource(R.string.pantry_metric_out), value = "${outOfStockItems.size}", color = StockRed)
+                                        if (totalInventoryValue > 0.0) {
+                                            MetricPill(
+                                                label = stringResource(R.string.pantry_metric_value),
+                                                value = AppSettingsPreferences.formatMoney(totalInventoryValue, currency),
+                                                color = StockGreen
+                                            )
+                                        }
                                     }
 
                                     if (lowStockItems.isNotEmpty()) {
@@ -300,7 +309,7 @@ fun PantryScreen(
                                                         ShoppingItem(
                                                             name = item.name,
                                                             category = item.category,
-                                                            quantity = Math.round(needed * 100.0) / 100.0,
+                                                            quantity = Math.round(needed * 1000.0) / 1000.0,
                                                             unit = item.unit,
                                                             isPurchased = false,
                                                             recipeSource = restockSource

@@ -4,16 +4,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,7 +38,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.PantryItem
 import com.example.settings.AppSettingsPreferences
+import com.example.ui.theme.StockGreen
 import com.example.util.LocalizedLabels
+import com.example.util.UnitConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,46 +55,81 @@ fun PantryFormDialog(
 
     var name by remember { mutableStateOf(initialItem?.name ?: "") }
     var category by remember { mutableStateOf(initialItem?.category ?: "Despensa") }
+    var unit by remember { mutableStateOf(initialItem?.unit?.ifBlank { "g" } ?: "g") }
+
     var quantityText by remember {
         mutableStateOf(
             if (initialItem != null) {
-                if (initialItem.quantity % 1.0 == 0.0) initialItem.quantity.toInt().toString() else initialItem.quantity.toString()
+                UnitConverter.formatQuantity(initialItem.quantity)
             } else "500"
         )
     }
-    var unit by remember { mutableStateOf(initialItem?.unit ?: "g") }
     var minQuantityText by remember {
         mutableStateOf(
             if (initialItem != null && initialItem.minQuantity > 0.0) {
-                if (initialItem.minQuantity % 1.0 == 0.0) initialItem.minQuantity.toInt().toString() else initialItem.minQuantity.toString()
+                UnitConverter.formatQuantity(initialItem.minQuantity)
             } else "100"
         )
     }
     var expirationDate by remember { mutableStateOf(initialItem?.expirationDate ?: "") }
 
+    // Pricing state: defaults to batch mode unless base quantity == 1
+    var isPerUnitPriceMode by remember {
+        mutableStateOf(initialItem != null && initialItem.cost > 0.0 && initialItem.costBaseQuantity == 1.0)
+    }
+    var priceInputUnit by remember {
+        mutableStateOf(
+            if (initialItem == null && (unit == "g" || unit == "mg")) {
+                "kg"
+            } else if (initialItem == null && unit == "ml") {
+                "l"
+            } else {
+                unit
+            }
+        )
+    }
     var costText by remember {
         mutableStateOf(
             if (initialItem != null && initialItem.cost > 0.0) {
-                if (initialItem.cost % 1.0 == 0.0) initialItem.cost.toInt().toString() else initialItem.cost.toString()
+                UnitConverter.formatQuantity(initialItem.cost, maxDecimals = 4)
             } else ""
         )
     }
     var costBaseQtyText by remember {
         mutableStateOf(
             if (initialItem != null && initialItem.costBaseQuantity > 0.0) {
-                if (initialItem.costBaseQuantity % 1.0 == 0.0) initialItem.costBaseQuantity.toInt().toString() else initialItem.costBaseQuantity.toString()
+                UnitConverter.formatQuantity(initialItem.costBaseQuantity)
+            } else if (initialItem == null) {
+                "1"
             } else ""
         )
     }
 
     val categories = listOf("Despensa", "Verduras", "Frutas", "Carnes", "Lácteos", "Granos", "Especias", "Bebidas", "Congelados")
-    val units = listOf("g", "kg", "ml", "l", "unidades", "taza", "cda", "cdta", "latas", "paquetes")
+    val units = UnitConverter.allPantryUnits
+    val compatiblePriceUnits = remember(unit) { UnitConverter.compatibleUnitsFor(unit) }
+    val activePriceUnit = if (priceInputUnit in compatiblePriceUnits) priceInputUnit else unit
 
-    val parsedCost = costText.toDoubleOrNull() ?: 0.0
-    val parsedCurrentQty = quantityText.toDoubleOrNull() ?: 0.0
-    val parsedCostBase = costBaseQtyText.toDoubleOrNull() ?: if (parsedCurrentQty > 0.0) parsedCurrentQty else 1.0
-    val calculatedUnitCost = if (parsedCost > 0.0 && parsedCostBase > 0.0) parsedCost / parsedCostBase else 0.0
+    val parsedCurrentQty = UnitConverter.parseDecimal(quantityText) ?: 0.0
+    val parsedCost = UnitConverter.parseDecimal(costText) ?: 0.0
+    val defaultBatchInPriceUnit = UnitConverter.convert(parsedCurrentQty, unit, activePriceUnit) ?: parsedCurrentQty
+    val parsedBaseInPriceUnit = UnitConverter.parseDecimal(costBaseQtyText)
+        ?: if (defaultBatchInPriceUnit > 0.0) defaultBatchInPriceUnit else 1.0
+
+    val costBreakdown = UnitConverter.computePantryCostBreakdown(
+        enteredPrice = parsedCost,
+        enteredBaseQty = parsedBaseInPriceUnit,
+        priceInputUnit = activePriceUnit,
+        itemUnit = unit,
+        isPerSingleUnitMode = isPerUnitPriceMode
+    )
+
+    val calculatedUnitCost = costBreakdown.unitCostInItemUnit
+    val macroRef = UnitConverter.macroUnitCostReference(calculatedUnitCost, unit)
+    val stockEquivalent = UnitConverter.humanEquivalent(parsedCurrentQty, unit)
+    val totalStockValue = parsedCurrentQty * calculatedUnitCost
     val displayUnit = LocalizedLabels.unit(context, unit)
+    val displayPriceUnit = LocalizedLabels.unit(context, activePriceUnit)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -99,7 +142,9 @@ fun PantryFormDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedTextField(
@@ -155,7 +200,7 @@ fun PantryFormDialog(
                         label = { Text(stringResource(R.string.pantry_form_qty_label)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
-                            .weight(1.2f)
+                            .weight(1.1f)
                             .testTag("pantry_form_qty"),
                         singleLine = true
                     )
@@ -172,17 +217,35 @@ fun PantryFormDialog(
                             readOnly = true,
                             label = { Text(stringResource(R.string.recipe_form_unit_label)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                                .testTag("pantry_form_unit")
                         )
                         ExposedDropdownMenu(
                             expanded = unitExpanded,
                             onDismissRequest = { unitExpanded = false }
                         ) {
-                            units.forEach { u ->
+                            units.forEach { newUnit ->
                                 DropdownMenuItem(
-                                    text = { Text(LocalizedLabels.unit(context, u)) },
+                                    text = { Text(LocalizedLabels.unit(context, newUnit)) },
                                     onClick = {
-                                        unit = u
+                                        val oldUnit = unit
+                                        if (oldUnit != newUnit && UnitConverter.isSameOrCompatible(oldUnit, newUnit)) {
+                                            UnitConverter.parseDecimal(quantityText)?.let { oldQty ->
+                                                UnitConverter.convert(oldQty, oldUnit, newUnit)?.let { converted ->
+                                                    quantityText = UnitConverter.formatQuantity(converted)
+                                                }
+                                            }
+                                            UnitConverter.parseDecimal(minQuantityText)?.let { oldMin ->
+                                                UnitConverter.convert(oldMin, oldUnit, newUnit)?.let { convertedMin ->
+                                                    minQuantityText = UnitConverter.formatQuantity(convertedMin)
+                                                }
+                                            }
+                                        }
+                                        unit = newUnit
+                                        if (!UnitConverter.isSameOrCompatible(priceInputUnit, newUnit)) {
+                                            priceInputUnit = newUnit
+                                        }
                                         unitExpanded = false
                                     }
                                 )
@@ -191,52 +254,201 @@ fun PantryFormDialog(
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = costText,
-                        onValueChange = { costText = it },
-                        label = { Text(stringResource(R.string.pantry_form_price_label, currency.symbol)) },
-                        placeholder = { Text("3.50") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier
-                            .weight(1.1f)
-                            .testTag("pantry_form_cost"),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = costBaseQtyText,
-                        onValueChange = { costBaseQtyText = it },
-                        label = { Text(stringResource(R.string.pantry_form_base_qty_label, displayUnit)) },
-                        placeholder = { Text(if (quantityText.isNotBlank()) quantityText else "1000") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("pantry_form_cost_base"),
-                        singleLine = true
+                if (stockEquivalent != null) {
+                    Text(
+                        text = stringResource(
+                            R.string.pantry_form_equiv_fmt,
+                            UnitConverter.formatQuantity(stockEquivalent.first),
+                            LocalizedLabels.unit(context, stockEquivalent.second)
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                if (calculatedUnitCost > 0.0) {
-                    Text(
-                        text = stringResource(
-                            R.string.pantry_form_unit_cost_preview,
-                            AppSettingsPreferences.formatMoney(calculatedUnitCost, currency, forceFourDecimalsIfTiny = true),
-                            displayUnit
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
+                // Flexible Price & Unit Conversion Card
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.pantry_form_price_mode_title),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = !isPerUnitPriceMode,
+                                onClick = { isPerUnitPriceMode = false },
+                                label = { Text(stringResource(R.string.pantry_form_price_mode_batch)) },
+                                modifier = Modifier.testTag("pantry_form_price_mode_batch")
+                            )
+                            FilterChip(
+                                selected = isPerUnitPriceMode,
+                                onClick = {
+                                    isPerUnitPriceMode = true
+                                    costBaseQtyText = "1"
+                                },
+                                label = { Text(stringResource(R.string.pantry_form_price_mode_unit)) },
+                                modifier = Modifier.testTag("pantry_form_price_mode_unit")
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = costText,
+                                onValueChange = { costText = it },
+                                label = { Text(stringResource(R.string.pantry_form_price_label, currency.symbol)) },
+                                placeholder = { Text("3.50") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier
+                                    .weight(1.1f)
+                                    .testTag("pantry_form_cost"),
+                                singleLine = true
+                            )
+
+                            if (compatiblePriceUnits.size > 1) {
+                                var priceUnitExpanded by remember { mutableStateOf(false) }
+                                ExposedDropdownMenuBox(
+                                    expanded = priceUnitExpanded,
+                                    onExpandedChange = { priceUnitExpanded = it },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    OutlinedTextField(
+                                        value = displayPriceUnit,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text(stringResource(R.string.pantry_form_price_unit_label)) },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = priceUnitExpanded) },
+                                        modifier = Modifier
+                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                                            .testTag("pantry_form_price_unit")
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = priceUnitExpanded,
+                                        onDismissRequest = { priceUnitExpanded = false }
+                                    ) {
+                                        compatiblePriceUnits.forEach { pUnit ->
+                                            DropdownMenuItem(
+                                                text = { Text(LocalizedLabels.unit(context, pUnit)) },
+                                                onClick = {
+                                                    val prevUnit = activePriceUnit
+                                                    if (!isPerUnitPriceMode && prevUnit != pUnit) {
+                                                        UnitConverter.parseDecimal(costBaseQtyText)?.let { oldBase ->
+                                                            UnitConverter.convert(oldBase, prevUnit, pUnit)?.let { conv ->
+                                                                costBaseQtyText = UnitConverter.formatQuantity(conv)
+                                                            }
+                                                        }
+                                                    }
+                                                    priceInputUnit = pUnit
+                                                    priceUnitExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!isPerUnitPriceMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = costBaseQtyText,
+                                    onValueChange = { costBaseQtyText = it },
+                                    label = { Text(stringResource(R.string.pantry_form_base_qty_label, displayPriceUnit)) },
+                                    placeholder = {
+                                        Text(
+                                            if (defaultBatchInPriceUnit > 0.0) UnitConverter.formatQuantity(defaultBatchInPriceUnit) else "1"
+                                        )
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("pantry_form_cost_base"),
+                                    singleLine = true
+                                )
+                            }
+
+                            if (parsedCurrentQty > 0.0) {
+                                TextButton(
+                                    onClick = {
+                                        costBaseQtyText = UnitConverter.formatQuantity(defaultBatchInPriceUnit)
+                                    }
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.pantry_form_use_stock_qty,
+                                            UnitConverter.formatQuantity(defaultBatchInPriceUnit),
+                                            displayPriceUnit
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        if (calculatedUnitCost > 0.0) {
+                            Column(
+                                modifier = Modifier.testTag("pantry_form_unit_cost_preview"),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.pantry_form_unit_cost_preview,
+                                        AppSettingsPreferences.formatMoney(calculatedUnitCost, currency, forceFourDecimalsIfTiny = true),
+                                        displayUnit
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (macroRef != null) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.pantry_form_macro_cost_fmt,
+                                            AppSettingsPreferences.formatMoney(macroRef.first, currency),
+                                            LocalizedLabels.unit(context, macroRef.second)
+                                        ),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = StockGreen,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                if (totalStockValue > 0.0) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.pantry_form_total_value_preview,
+                                            AppSettingsPreferences.formatMoney(totalStockValue, currency)
+                                        ),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 OutlinedTextField(
                     value = minQuantityText,
                     onValueChange = { minQuantityText = it },
-                    label = { Text(stringResource(R.string.pantry_form_min_qty_label)) },
+                    label = { Text("${stringResource(R.string.pantry_form_min_qty_label)} ($displayUnit)") },
                     placeholder = { Text("100") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier
@@ -259,18 +471,20 @@ fun PantryFormDialog(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val qty = quantityText.toDoubleOrNull() ?: 0.0
-                        val minQty = minQuantityText.toDoubleOrNull() ?: 0.0
-                        val costVal = costText.toDoubleOrNull() ?: 0.0
-                        val costBaseVal = costBaseQtyText.toDoubleOrNull() ?: qty
+                        val qty = (UnitConverter.parseDecimal(quantityText) ?: 0.0).coerceAtLeast(0.0)
+                        val minQty = (UnitConverter.parseDecimal(minQuantityText) ?: 0.0).coerceAtLeast(0.0)
+                        val finalCostVal = costBreakdown.costInItemUnit.coerceAtLeast(0.0)
+                        val finalCostBaseVal = if (finalCostVal > 0.0) {
+                            costBreakdown.baseQuantityInItemUnit.coerceAtLeast(0.0001)
+                        } else 0.0
                         val item = (initialItem ?: PantryItem()).copy(
                             name = name.trim(),
                             category = category.trim(),
-                            quantity = qty.coerceAtLeast(0.0),
+                            quantity = qty,
                             unit = unit.trim(),
-                            minQuantity = minQty.coerceAtLeast(0.0),
-                            cost = costVal.coerceAtLeast(0.0),
-                            costBaseQuantity = costBaseVal.coerceAtLeast(0.0),
+                            minQuantity = minQty,
+                            cost = finalCostVal,
+                            costBaseQuantity = finalCostBaseVal,
                             expirationDate = expirationDate.trim()
                         )
                         onSave(item)

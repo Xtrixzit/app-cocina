@@ -32,6 +32,7 @@ import com.example.R
 import com.example.data.model.ShoppingItem
 import com.example.ui.theme.CaveatFontFamily
 import com.example.util.LocalizedLabels
+import com.example.util.UnitConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,14 +44,12 @@ fun ShoppingItemEditDialog(
     val context = LocalContext.current
     var name by remember { mutableStateOf(item.name) }
     var quantityText by remember {
-        mutableStateOf(
-            if (item.quantity % 1.0 == 0.0) item.quantity.toInt().toString() else item.quantity.toString()
-        )
+        mutableStateOf(UnitConverter.formatQuantity(item.quantity))
     }
     var unit by remember { mutableStateOf(if (item.unit.isNotBlank()) item.unit else "unidades") }
     var unitExpanded by remember { mutableStateOf(false) }
 
-    val commonUnits = listOf("unidades", "kg", "g", "l", "ml", "paquetes", "latas", "piezas", "docenas")
+    val commonUnits = UnitConverter.allShoppingUnits
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -115,6 +114,11 @@ fun ShoppingItemEditDialog(
                                 DropdownMenuItem(
                                     text = { Text(LocalizedLabels.unit(context, u)) },
                                     onClick = {
+                                        val currentQty = UnitConverter.parseDecimal(quantityText)
+                                        val converted = currentQty?.let { UnitConverter.convert(it, unit, u) }
+                                        if (converted != null) {
+                                            quantityText = UnitConverter.formatQuantity(converted)
+                                        }
                                         unit = u
                                         unitExpanded = false
                                     }
@@ -123,13 +127,26 @@ fun ShoppingItemEditDialog(
                         }
                     }
                 }
+
+                val parsedPreviewQty = UnitConverter.parseDecimal(quantityText) ?: 0.0
+                UnitConverter.humanEquivalent(parsedPreviewQty, unit)?.let { (eqVal, eqUnit) ->
+                    Text(
+                        text = stringResource(
+                            R.string.pantry_form_equiv_fmt,
+                            UnitConverter.formatQuantity(eqVal),
+                            LocalizedLabels.unit(context, eqUnit)
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val parsedQty = quantityText.toDoubleOrNull() ?: 0.0
+                        val parsedQty = UnitConverter.parseDecimal(quantityText) ?: 0.0
                         onSave(
                             item.copy(
                                 name = name.trim(),

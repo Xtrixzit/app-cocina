@@ -580,4 +580,178 @@
     <string name="chef_chat_timeout">AI Chef request timed out after 60 seconds. Please try again.</string>
     <string name="chef_chat_error_generic">Could not complete AI Chef request.</string>
     <string name="chef_chat_empty_response">The model returned no text. Try rephrasing your question.</string>
+
+    <!-- Google Drive & AI-Readable Formats -->
+    <string name="drive_ai_card_title">Google Drive for Gemini &amp; Phone AIs</string>
+    <string name="drive_ai_card_desc">Gemini and mobile assistants cannot read .json backups. Sync your inventory and recipes to Google Drive as native Google Docs, Google Sheets, and Markdown (.md) so any AI can read them immediately.</string>
+    <string name="drive_ai_sync_now">Sync to my Google Drive</string>
+    <string name="drive_ai_syncing">Syncing Docs &amp; Sheets to Drive…</string>
+    <string name="drive_ai_auto_sync">Auto-sync changes to Google Drive</string>
+    <string name="drive_ai_auto_sync_sub">Updates Gemini-readable Drive docs after every change</string>
+    <string name="drive_ai_status_synced">Synced to Drive: %1$s</string>
+    <string name="drive_ai_status_never">Not yet synced to Google Drive</string>
+    <string name="drive_ai_open_doc">Open Doc in Drive</string>
+    <string name="drive_ai_open_sheet">Open Sheet</string>
+    <string name="drive_ai_copy_link">Copy link for Gemini</string>
+    <string name="drive_ai_link_copied">Document link copied for Gemini</string>
+    <string name="drive_ai_share_text">Share AI summary</string>
+    <string name="drive_ai_export_md">Save .md</string>
+    <string name="drive_ai_export_csv">Save .csv</string>
+    <string name="drive_ai_sync_success">Google Drive updated (Google Doc, Sheet, and .md in Recetario folder).</string>
+    <string name="drive_ai_sync_cancelled">Google Drive authorization cancelled.</string>
+    <string name="drive_ai_sync_error">Failed to sync to Google Drive: %1$s</string>
+    <string name="drive_ai_doc_name">Recetario - Pantry &amp; Recipes (For AI)</string>
+    <string name="drive_ai_sheet_name">Recetario - Pantry &amp; Shopping (Sheets)</string>
+    <string name="drive_ai_md_filename">recetario_inventory_ai.md</string>
+    <string name="settings_sync_drive_btn">Sync to Google Drive (AI Docs/Sheets)</string>
+    <string name="settings_export_md_btn">Export AI-readable inventory (.md)</string>
+    <string name="settings_export_csv_btn">Export Sheets/Excel table (.csv)</string>
+
+    <!-- AI-Readable Export Document Headings -->
+    <string name="ai_doc_title">Recetario — Pantry Inventory, Shopping &amp; Recipes</string>
+    <string name="ai_doc_generated_at">Updated: %1$s | Currency: %2$s | Suggested Margin: %3$d%%</string>
+    <string name="ai_doc_pantry_section">1. Current Pantry Inventory (%1$d items)</string>
+    <string name="ai_doc_pantry_empty">No items registered in pantry.</string>
+    <string name="ai_doc_status_out">OUT OF STOCK</string>
+    <string name="ai_doc_status_low">LOW STOCK</string>
+    <string name="ai_doc_status_ok">IN STOCK</string>
+    <string name="ai_doc_shopping_section">2. Shopping List (%1$d items)</string>
+    <string name="ai_doc_shopping_empty">Shopping list is empty.</string>
+    <string name="ai_doc_shopping_pending">Pending</string>
+    <string name="ai_doc_shopping_done">Purchased</string>
+    <string name="ai_doc_recipes_section">3. Saved Recipes (%1$d recipes)</string>
+    <string name="ai_doc_recipes_empty">No recipes saved yet.</string>
+    <string name="ai_doc_ingredients_label">Ingredients</string>
+    <string name="ai_doc_steps_label">Instructions</string>
+    <string name="ai_doc_notes_label">Notes</string>
+    <string name="ai_doc_production_section">4. Recent Production &amp; Cost History</string>
+    <string name="ai_doc_servings_fmt">%1$d servings • Prep %2$d min • Cook %3$d min • %4$s</string>
+
+    <!-- Gemini Resilience Diagnostics -->
+    <string name="chef_chat_offline">No internet connection available for AI Chef. Check your network and try again.</string>
+    <string name="chef_chat_err_quota">Firebase AI quota or plan limit reached for this model. Try again shortly or switch to Practical Chef mode.</string>
+    <string name="chef_chat_err_appcheck">App Check verification failed (403). Close and reopen the app to refresh the security token.</string>
+    <string name="recipe_photo_ai_quota_blaze">AI photo generation requires available quota and an active Firebase Blaze plan. You can still use Camera, Gallery, or realistic reference photos anytime.</string>
+    <string name="recipe_photo_ai_appcheck">App Check verification error (403) while generating photo. Restart the app to refresh the token.</string>
+    <string name="recipe_photo_ai_offline">No internet connection available to process the AI photo. Check your network and try again.</string>
+
+    <!-- Mandatory Guided Tutorial -->
+    <string name="settings_replay_tutorial_btn">Replay step-by-step guided tutorial</string>
+    <string name="tutorial_header_badge">Required Tutorial</string>
+    <string name="tutorial_progress_fmt">Step %1$d of %2$d</string>
+    <string name="tutorial_must_finish_note">Complete all %1$d steps to unlock full unrestricted use of Recetario.</string>
+    <string name="tutorial_confirm_check">I confirm I reviewed every button and function on this screen</string>
+    <string name="tutorial_prev_btn">Back</string>
+    <string name="tutorial_next_btn">Next step</string>
+    <string name="tutorial_finish_btn">Finish tutorial &amp; start!</string>
+
+    <string name="tutorial_step1_title">1. Top bar &amp; main navigation</string>
+    <string name="tutorial_step1_sub">Access global tools from the top bar regardless of the active tab:</string>
+    <string name="tutorial_step1_b1_title">✨ AI Chef Button (Sparkles)</string>
+    <string name="tutorial_step1_b1_desc">Opens Gemini chat grounded in your real pantry and recipes; supports text and real photos.</string>
+    <string name="tutorial_step1_b2_title">⚙️ Settings Button (Gear)</string>
+    <string name="tutorial_step1_b2_desc">Change language (ES/EN/PT/FR), currency, profit margin %%, backups, Google Drive AI, license, and this tutorial.</string>
+    <string name="tutorial_step1_b3_title">👤 Google / Guest Account &amp; ℹ️ About</string>
+    <string name="tutorial_step1_b3_desc">Sync Firestore cloud across devices, review privacy policy, or manage guest sessions.</string>
+    <string name="tutorial_step1_b4_title">📑 Bottom 5-tab bar</string>
+    <string name="tutorial_step1_b4_desc">Switch between Recipes, Pantry, Shopping List, Production, and Cooking &amp; Voice Assistant.</string>
+
+    <string name="tutorial_step2_title">2. Recipes &amp; real photography</string>
+    <string name="tutorial_step2_sub">Manage your entire recipe book and add dishes with authentic photos:</string>
+    <string name="tutorial_step2_b1_title">🔍 Search &amp; category chips</string>
+    <string name="tutorial_step2_b1_desc">Filter by dish title or ingredient across Breakfast, Lunch, Dinner, Desserts, Snacks, or Drinks.</string>
+    <string name="tutorial_step2_b2_title">🟨 Post-It shortcuts &amp; AI Chef</string>
+    <string name="tutorial_step2_b2_desc">One-tap jumps to Production, Shopping Check-List, What to Cook, Help, or AI Chef chat.</string>
+    <string name="tutorial_step2_b3_title">➕ + New Recipe Button</string>
+    <string name="tutorial_step2_b3_desc">Add ingredients, manual costs, and steps; shoot with real Camera, pick from Gallery, paste URL, pick reference photo, or AI generate/enhance 4:3, 16:9, or 9:16 photos.</string>
+
+    <string name="tutorial_step3_title">3. Recipe detail &amp; live scaling</string>
+    <string name="tutorial_step3_sub">Tap any recipe card to open its full cooking view:</string>
+    <string name="tutorial_step3_b1_title">➖ / ➕ Live servings scaler</string>
+    <string name="tutorial_step3_b1_desc">Increase or decrease servings and every ingredient quantity and cost recalculates instantly.</string>
+    <string name="tutorial_step3_b2_title">🛒 Add missing to Shopping List</string>
+    <string name="tutorial_step3_b2_desc">Compares the scaled recipe against your pantry and adds only missing items to Shopping List.</string>
+    <string name="tutorial_step3_b3_title">✏️ Edit &amp; 🗑️ Delete</string>
+    <string name="tutorial_step3_b3_desc">Update photos, ingredients, or steps anytime, or remove the recipe with confirmation.</string>
+
+    <string name="tutorial_step4_title">4. Pantry inventory &amp; alerts</string>
+    <string name="tutorial_step4_sub">Track real kitchen or business stock levels at a glance:</string>
+    <string name="tutorial_step4_b1_title">🚦 Green / Yellow / Red indicators</string>
+    <string name="tutorial_step4_b1_desc">Show healthy stock, low stock near threshold, or out-of-stock alerts.</string>
+    <string name="tutorial_step4_b2_title">➖ / ➕ Quick adjust &amp; Low Stock filter</string>
+    <string name="tutorial_step4_b2_desc">Update stock directly on cards or filter to see only items running low.</string>
+    <string name="tutorial_step4_b3_title">🛒 Restock, 🔄 Sync/Share &amp; ➕ Add Supply</string>
+    <string name="tutorial_step4_b3_desc">Push low items to Shopping List in one tap, share inventory tokens, or add priced ingredients with + Supply.</string>
+
+    <string name="tutorial_step5_title">5. Smart shopping list</string>
+    <string name="tutorial_step5_sub">Track needed supplies and move purchases back to your pantry:</string>
+    <string name="tutorial_step5_b1_title">➕ Quick-add bar at top</string>
+    <string name="tutorial_step5_b1_desc">Enter item name, quantity, unit, and mark whether already available or still to buy.</string>
+    <string name="tutorial_step5_b2_title">🏷️ All / Available / To Buy tabs</string>
+    <string name="tutorial_step5_b2_desc">Check off purchased items, adjust amounts with +/-, or edit details per card.</string>
+    <string name="tutorial_step5_b3_title">🧹 Clear checked</string>
+    <string name="tutorial_step5_b3_desc">Clear checked entries or transfer bought supplies straight into your Pantry stock.</string>
+
+    <string name="tutorial_step6_title">6. Commercial production &amp; costing</string>
+    <string name="tutorial_step6_sub">Scale batches accurately for home meals or commercial food sales:</string>
+    <string name="tutorial_step6_b1_title">📐 3 calculation modes</string>
+    <string name="tutorial_step6_b1_desc">Scale by Servings (with 2x–100x chips), by Key Ingredient on hand, or by Batches/Runs.</string>
+    <string name="tutorial_step6_b2_title">💰 Real cost &amp; suggested selling price</string>
+    <string name="tutorial_step6_b2_desc">Auto-converts units (kg↔g, l↔ml), computes total/unit cost, and applies your profit margin %%.</string>
+    <string name="tutorial_step6_b3_title">📉 Deduct Pantry &amp; History log</string>
+    <string name="tutorial_step6_b3_desc">Record production while deducting real stock, send shortages to Shopping List, and review logs.</string>
+
+    <string name="tutorial_step7_title">7. Hands-free voice assistant</string>
+    <string name="tutorial_step7_sub">Query your pantry and recipes by voice inside or outside the app:</string>
+    <string name="tutorial_step7_b1_title">🎙️ Speak &amp; manual query bar</string>
+    <string name="tutorial_step7_b1_desc">Tap the microphone to speak or type a query; Recetario replies on screen and reads aloud via TTS.</string>
+    <string name="tutorial_step7_b2_title">⚡ Sample voice chips</string>
+    <string name="tutorial_step7_b2_desc">Tap any sample question (e.g., ingredient count or cookable recipes) to test immediately.</string>
+    <string name="tutorial_step7_b3_title">🤖 Gemini / Google Assistant / Bixby link</string>
+    <string name="tutorial_step7_b3_desc">Connects via AppFunctions and voice deep links so phone assistants read your live stock.</string>
+
+    <string name="tutorial_step8_title">8. Google Drive for Gemini, Timers &amp; Viability</string>
+    <string name="tutorial_step8_sub">Expose readable files to phone AIs and manage kitchen timing:</string>
+    <string name="tutorial_step8_b1_title">☁️ Sync to Google Drive (Docs, Sheets &amp; .md)</string>
+    <string name="tutorial_step8_b1_desc">Uploads Google Docs, Sheets, and Markdown in your Recetario folder so Gemini reads your inventory (not .json).</string>
+    <string name="tutorial_step8_b2_title">🔗 Auto-sync, Copy link &amp; Export</string>
+    <string name="tutorial_step8_b2_desc">Keep Drive updated automatically after changes, copy the link for Gemini, or save .md/.csv locally.</string>
+    <string name="tutorial_step8_b3_title">⏱️ Kitchen Timers &amp; 🍳 Viable Recipes</string>
+    <string name="tutorial_step8_b3_desc">Start quick 3m–30m timers with alarm alerts and check 100%% ready dishes. Replay this tutorial anytime in Settings.</string>
+
+    <!-- Enhanced Quantity & Price Calculations -->
+    <string name="pantry_form_equiv_fmt">Equivalent: %1$s %2$s</string>
+    <string name="pantry_form_price_mode_title">Purchase price calculator</string>
+    <string name="pantry_form_price_mode_batch">By pack / batch</string>
+    <string name="pantry_form_price_mode_unit">Per 1 unit (e.g. $/kg)</string>
+    <string name="pantry_form_price_unit_label">Price unit</string>
+    <string name="pantry_form_use_stock_qty">Use stock (%1$s %2$s)</string>
+    <string name="pantry_form_total_value_preview">Stock value: %1$s</string>
+    <string name="pantry_form_macro_cost_fmt">Reference: %1$s / %2$s</string>
+    <string name="pantry_metric_value">Stock value</string>
+
+    <string name="recipe_form_batch_helper_toggle">Calculate from kg / pack</string>
+    <string name="recipe_form_batch_paid_label">Paid (%1$s)</string>
+    <string name="recipe_form_batch_qty_label">Bought qty</string>
+    <string name="recipe_form_batch_unit_label">Bought unit</string>
+    <string name="recipe_form_line_cost_preview">Recipe line cost: %1$s</string>
+    <string name="recipe_form_summary_title">Estimated recipe cost summary</string>
+    <string name="recipe_form_summary_line">Total (%1$d serv.): %2$s · Serving: %3$s · Sale (+%4$d%%): %5$s</string>
+
+    <string name="recipe_detail_custom_servings_btn">Exact</string>
+    <string name="recipe_detail_custom_servings_title">Exact number of servings</string>
+    <string name="recipe_detail_custom_servings_label">Servings (1 - 500)</string>
+    <string name="recipe_detail_equiv_stock">≈ %1$s %2$s</string>
+
+    <string name="shopping_est_total_label">Estimated list total: %1$s · Pending: %2$s</string>
+    <string name="shopping_item_est_cost">Est.: %1$s</string>
+
+    <string name="prod_custom_servings_label">Servings</string>
+    <string name="prod_custom_batches_label">Batches</string>
+    <string name="prod_key_ing_unit_label">Unit</string>
+    <string name="prod_key_ing_converted_fmt">Equals %1$s %2$s for recipe</string>
+    <string name="prod_suggested_per_portion">Suggested price/serving (+%1$d%%): %2$s</string>
+    <string name="prod_weight_output_line">Ingredient mass: %1$s · Cost %2$s/kg · Sale %3$s/kg</string>
+    <string name="prod_volume_output_line">Ingredient vol.: %1$s · Cost %2$s/L · Sale %3$s/L</string>
+    <string name="prod_ing_unit_price_tag">Rate: %1$s/%2$s</string>
 </resources>

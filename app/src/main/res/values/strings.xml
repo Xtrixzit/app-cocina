@@ -580,4 +580,178 @@
     <string name="chef_chat_timeout">La consulta al Chef IA tardó más de 60 segundos. Intenta de nuevo.</string>
     <string name="chef_chat_error_generic">No se pudo completar la consulta al Chef IA.</string>
     <string name="chef_chat_empty_response">El modelo no devolvió texto. Intenta reformular tu pregunta.</string>
+
+    <!-- Google Drive & AI-Readable Formats -->
+    <string name="drive_ai_card_title">Google Drive para Gemini e IAs</string>
+    <string name="drive_ai_card_desc">Gemini y los asistentes del celular no leen archivos .json. Sincroniza tu inventario y recetas en tu Google Drive en formato Google Docs, Google Sheets y Markdown (.md) para que cualquier IA los lea al instante.</string>
+    <string name="drive_ai_sync_now">Sincronizar con mi Google Drive</string>
+    <string name="drive_ai_syncing">Sincronizando Docs y Sheets en Drive…</string>
+    <string name="drive_ai_auto_sync">Auto-sincronizar cambios a Google Drive</string>
+    <string name="drive_ai_auto_sync_sub">Actualiza los documentos legibles para Gemini tras cada cambio</string>
+    <string name="drive_ai_status_synced">Sincronizado en Drive: %1$s</string>
+    <string name="drive_ai_status_never">Aún no sincronizado con Google Drive</string>
+    <string name="drive_ai_open_doc">Abrir Doc en Drive</string>
+    <string name="drive_ai_open_sheet">Abrir Hoja (Sheets)</string>
+    <string name="drive_ai_copy_link">Copiar enlace para Gemini</string>
+    <string name="drive_ai_link_copied">Enlace del documento copiado para usar en Gemini</string>
+    <string name="drive_ai_share_text">Compartir resumen IA</string>
+    <string name="drive_ai_export_md">Guardar .md</string>
+    <string name="drive_ai_export_csv">Guardar .csv</string>
+    <string name="drive_ai_sync_success">Google Drive actualizado (Doc, Hoja de cálculo y .md en carpeta Recetario).</string>
+    <string name="drive_ai_sync_cancelled">Autorización de Google Drive cancelada.</string>
+    <string name="drive_ai_sync_error">Error al sincronizar con Google Drive: %1$s</string>
+    <string name="drive_ai_doc_name">Recetario - Inventario y Recetas (Para IA)</string>
+    <string name="drive_ai_sheet_name">Recetario - Despensa y Compras (Sheets)</string>
+    <string name="drive_ai_md_filename">recetario_inventario_ia.md</string>
+    <string name="settings_sync_drive_btn">Sincronizar con Google Drive (Docs/Sheets IA)</string>
+    <string name="settings_export_md_btn">Exportar inventario legible para IA (.md)</string>
+    <string name="settings_export_csv_btn">Exportar tabla para Sheets/Excel (.csv)</string>
+
+    <!-- AI-Readable Export Document Headings -->
+    <string name="ai_doc_title">Recetario — Inventario de Despensa, Compras y Recetas</string>
+    <string name="ai_doc_generated_at">Actualizado el: %1$s | Moneda: %2$s | Margen sugerido: %3$d%%</string>
+    <string name="ai_doc_pantry_section">1. Inventario Actual de Despensa (%1$d productos)</string>
+    <string name="ai_doc_pantry_empty">No hay productos registrados en la despensa.</string>
+    <string name="ai_doc_status_out">AGOTADO</string>
+    <string name="ai_doc_status_low">STOCK BAJO</string>
+    <string name="ai_doc_status_ok">DISPONIBLE</string>
+    <string name="ai_doc_shopping_section">2. Lista de Compras (%1$d artículos)</string>
+    <string name="ai_doc_shopping_empty">La lista de compras está vacía.</string>
+    <string name="ai_doc_shopping_pending">Pendiente</string>
+    <string name="ai_doc_shopping_done">Comprado</string>
+    <string name="ai_doc_recipes_section">3. Recetas Guardadas (%1$d recetas)</string>
+    <string name="ai_doc_recipes_empty">No hay recetas guardadas todavía.</string>
+    <string name="ai_doc_ingredients_label">Ingredientes</string>
+    <string name="ai_doc_steps_label">Preparación</string>
+    <string name="ai_doc_notes_label">Notas</string>
+    <string name="ai_doc_production_section">4. Historial Reciente de Producción y Costos</string>
+    <string name="ai_doc_servings_fmt">%1$d porciones • Prep %2$d min • Cocción %3$d min • %4$s</string>
+
+    <!-- Gemini Resilience Diagnostics -->
+    <string name="chef_chat_offline">Sin conexión a internet para consultar al Chef IA. Revisa tu red e intenta de nuevo.</string>
+    <string name="chef_chat_err_quota">Cuota o plan de Firebase AI temporalmente agotados para este modelo. Intenta de nuevo en unos segundos o usa el modo Chef Práctico.</string>
+    <string name="chef_chat_err_appcheck">Error de verificación App Check (403). Cierra y vuelve a abrir la app para renovar el token de seguridad.</string>
+    <string name="recipe_photo_ai_quota_blaze">La generación de fotos con IA requiere cuota disponible y plan Firebase Blaze activo. Mientras tanto puedes usar Cámara, Galería o fotos referenciales reales.</string>
+    <string name="recipe_photo_ai_appcheck">Error de verificación App Check (403) al generar foto. Reinicia la app para renovar el token.</string>
+    <string name="recipe_photo_ai_offline">Sin conexión a internet para procesar la foto con IA. Revisa tu red e intenta de nuevo.</string>
+
+    <!-- Mandatory Guided Tutorial -->
+    <string name="settings_replay_tutorial_btn">Repetir tutorial guiado paso a paso</string>
+    <string name="tutorial_header_badge">Tutorial obligatorio</string>
+    <string name="tutorial_progress_fmt">Paso %1$d de %2$d</string>
+    <string name="tutorial_must_finish_note">Debes completar los %1$d pasos para desbloquear el uso libre de Recetario.</string>
+    <string name="tutorial_confirm_check">Confirmo que revisé cada botón y función de esta pantalla</string>
+    <string name="tutorial_prev_btn">Anterior</string>
+    <string name="tutorial_next_btn">Siguiente paso</string>
+    <string name="tutorial_finish_btn">¡Finalizar tutorial y usar app!</string>
+
+    <string name="tutorial_step1_title">1. Barra superior y navegación</string>
+    <string name="tutorial_step1_sub">Desde la parte superior accedes a las herramientas globales sin importar en qué pestaña estés:</string>
+    <string name="tutorial_step1_b1_title">✨ Botón Chef IA (Estrellas)</string>
+    <string name="tutorial_step1_b1_desc">Abre el chat inteligente con Gemini conectado a tu despensa y recetas reales; admite texto y fotos reales.</string>
+    <string name="tutorial_step1_b2_title">⚙️ Botón Ajustes (Engranaje)</string>
+    <string name="tutorial_step1_b2_desc">Cambia idioma (ES/EN/PT/FR), moneda, margen de ganancia %%, backups, Google Drive IA, licencia y este tutorial.</string>
+    <string name="tutorial_step1_b3_title">👤 Cuenta Google / Invitado e ℹ️ Ayuda</string>
+    <string name="tutorial_step1_b3_desc">Sincroniza tu nube Firestore entre dispositivos o revisa privacidad y estado de sesión.</string>
+    <string name="tutorial_step1_b4_title">📑 Barra inferior de 5 pestañas</string>
+    <string name="tutorial_step1_b4_desc">Cambia al instante entre Recetas, Despensa, Compras, Producción y Asistente de Cocina y Voz.</string>
+
+    <string name="tutorial_step2_title">2. Recetas y fotos reales</string>
+    <string name="tutorial_step2_sub">Aquí administras todo tu recetario y creas platos nuevos con fotografías auténticas:</string>
+    <string name="tutorial_step2_b1_title">🔍 Buscador y chips de categoría</string>
+    <string name="tutorial_step2_b1_desc">Busca por nombre o ingrediente y filtra por Desayunos, Almuerzos, Cenas, Postres, Snacks o Bebidas.</string>
+    <string name="tutorial_step2_b2_title">🟨 Botones Post-It y Chef IA</string>
+    <string name="tutorial_step2_b2_desc">Atajos directos para ir a Producción, Check-List de compras, Cocinar hoy, Ayuda o abrir el Chef IA.</string>
+    <string name="tutorial_step2_b3_title">➕ Botón + Nueva Receta</string>
+    <string name="tutorial_step2_b3_desc">Agrega ingredientes, costos manuales y pasos; toma foto con Cámara real, elige de Galería, pega URL, usa foto referencial o mejora/genera foto realista 4:3, 16:9 o 9:16.</string>
+
+    <string name="tutorial_step3_title">3. Detalle y escalado de recetas</string>
+    <string name="tutorial_step3_sub">Al tocar cualquier tarjeta de receta se abre su vista completa de preparación:</string>
+    <string name="tutorial_step3_b1_title">➖ / ➕ Escalado de porciones en vivo</string>
+    <string name="tutorial_step3_b1_desc">Sube o baja las porciones y todas las cantidades e importes se recalculan al instante.</string>
+    <string name="tutorial_step3_b2_title">🛒 Enviar faltantes a Compras</string>
+    <string name="tutorial_step3_b2_desc">Compara automáticamente la receta contra tu despensa y añade solo lo que te falta a tu lista de compras.</string>
+    <string name="tutorial_step3_b3_title">✏️ Editar y 🗑️ Eliminar</string>
+    <string name="tutorial_step3_b3_desc">Modifica foto, ingredientes o pasos cuando quieras, o borra la receta con confirmación.</string>
+
+    <string name="tutorial_step4_title">4. Despensa e inventario real</string>
+    <string name="tutorial_step4_sub">Controla las existencias reales de tu cocina o negocio en todo momento:</string>
+    <string name="tutorial_step4_b1_title">🚦 Indicadores Verde / Amarillo / Rojo</string>
+    <string name="tutorial_step4_b1_desc">Muestran stock saludable, stock bajo (cerca del mínimo) o agotado según tu umbral configurado.</string>
+    <string name="tutorial_step4_b2_title">➖ / ➕ Ajuste rápido y filtro Bajo Stock</string>
+    <string name="tutorial_step4_b2_desc">Suma o resta cantidades directo en la tarjeta y filtra solo lo que está por terminarse.</string>
+    <string name="tutorial_step4_b3_title">🛒 Reabastecer y 🔄 Compartir</string>
+    <string name="tutorial_step4_b3_desc">Envía los faltantes a Compras con un toque, comparte tu token de inventario o agrega nuevos insumos con costo base con + Insumo.</string>
+
+    <string name="tutorial_step5_title">5. Lista de compras inteligente</string>
+    <string name="tutorial_step5_sub">Organiza tus compras pendientes y actualiza tu despensa al regresar del mercado:</string>
+    <string name="tutorial_step5_b1_title">➕ Carga rápida superior</string>
+    <string name="tutorial_step5_b1_desc">Escribe producto, cantidad, unidad y marca si ya está disponible o pendiente por comprar.</string>
+    <string name="tutorial_step5_b2_title">🏷️ Pestañas Todos / Disponibles / Por comprar</string>
+    <string name="tutorial_step5_b2_desc">Marca la casilla de comprado en cada tarjeta, ajusta cantidades o edita detalles fácilmente.</string>
+    <string name="tutorial_step5_b3_title">🧹 Limpiar comprados</string>
+    <string name="tutorial_step5_b3_desc">Borra los artículos marcados y mantén la lista limpia; también puedes transferir los comprados directo a Despensa.</string>
+
+    <string name="tutorial_step6_title">6. Producción comercial y costos</string>
+    <string name="tutorial_step6_sub">Calcula lotes exactos para cocinar o vender con rentabilidad real:</string>
+    <string name="tutorial_step6_b1_title">📐 3 modos de cálculo</string>
+    <string name="tutorial_step6_b1_desc">Calcula por Porciones (incluye multiplicadores rápidos 2x–100x), por Ingrediente Clave disponible o por Tandas/Lotes.</string>
+    <string name="tutorial_step6_b2_title">💰 Costo real y precio de venta sugerido</string>
+    <string name="tutorial_step6_b2_desc">Convierte unidades automáticamente (kg↔g, l↔ml), calcula costo total/unitario y aplica tu margen de ganancia %%.</string>
+    <string name="tutorial_step6_b3_title">📉 Descontar de Despensa e Historial</string>
+    <string name="tutorial_step6_b3_desc">Registra la producción descontando los insumos del stock real o envía faltantes a Compras y consulta tu historial.</string>
+
+    <string name="tutorial_step7_title">7. Asistente de voz manos libres</string>
+    <string name="tutorial_step7_sub">Consulta tu despensa y recetas hablando incluso sin abrir la app:</string>
+    <string name="tutorial_step7_b1_title">🎙️ Botón Hablar por voz y texto manual</string>
+    <string name="tutorial_step7_b1_desc">Toca el micrófono para preguntar en voz alta o escribe una consulta; Recetario responde en pantalla y con lectura por voz.</string>
+    <string name="tutorial_step7_b2_title">⚡ Comandos rápidos de ejemplo</string>
+    <string name="tutorial_step7_b2_desc">Toca cualquier chip (ej. cuánto tienes de un producto o qué puedes cocinar) para probarlo de inmediato.</string>
+    <string name="tutorial_step7_b3_title">🤖 Enlace con Gemini / Assistant / Bixby</string>
+    <string name="tutorial_step7_b3_desc">Usa AppFunctions y deep links de voz para consultar tu inventario desde el asistente del teléfono.</string>
+
+    <string name="tutorial_step8_title">8. Google Drive para Gemini, Timers y Viabilidad</string>
+    <string name="tutorial_step8_sub">Conecta tu inventario con las IAs externas del teléfono y controla la cocción:</string>
+    <string name="tutorial_step8_b1_title">☁️ Sincronizar con Google Drive (Docs, Sheets y .md)</string>
+    <string name="tutorial_step8_b1_desc">Convierte tu inventario y recetas en Google Docs, Sheets y Markdown dentro de la carpeta Recetario para que Gemini del móvil sí pueda leerlos (no usa .json).</string>
+    <string name="tutorial_step8_b2_title">🔗 Auto-sincronizar, Copiar enlace y Exportar</string>
+    <string name="tutorial_step8_b2_desc">Activa la actualización automática tras cada cambio, copia el enlace para pegarlo en Gemini o guarda copias locales .md y .csv.</string>
+    <string name="tutorial_step8_b3_title">⏱️ Temporizadores y 🍳 Recetas viables</string>
+    <string name="tutorial_step8_b3_desc">Inicia timers rápidos (3m–30m) con alarma y mira qué recetas tienen 100%% o 50–99%% de ingredientes listos. Repite este tutorial cuando quieras en Ajustes.</string>
+
+    <!-- Enhanced Quantity & Price Calculations -->
+    <string name="pantry_form_equiv_fmt">Equivalente: %1$s %2$s</string>
+    <string name="pantry_form_price_mode_title">Cálculo de precio de compra</string>
+    <string name="pantry_form_price_mode_batch">Por lote / empaque</string>
+    <string name="pantry_form_price_mode_unit">Por 1 unidad (ej. $/kg)</string>
+    <string name="pantry_form_price_unit_label">Unidad del precio</string>
+    <string name="pantry_form_use_stock_qty">Usar stock (%1$s %2$s)</string>
+    <string name="pantry_form_total_value_preview">Valor en despensa: %1$s</string>
+    <string name="pantry_form_macro_cost_fmt">Referencia: %1$s / %2$s</string>
+    <string name="pantry_metric_value">Valor stock</string>
+
+    <string name="recipe_form_batch_helper_toggle">Calcular por kilo / lote</string>
+    <string name="recipe_form_batch_paid_label">Pagado (%1$s)</string>
+    <string name="recipe_form_batch_qty_label">Cant. compra</string>
+    <string name="recipe_form_batch_unit_label">Unid. compra</string>
+    <string name="recipe_form_line_cost_preview">Costo en receta: %1$s</string>
+    <string name="recipe_form_summary_title">Resumen de costos de la receta</string>
+    <string name="recipe_form_summary_line">Total (%1$d porc.): %2$s · Porción: %3$s · Venta (+%4$d%%): %5$s</string>
+
+    <string name="recipe_detail_custom_servings_btn">Exacto</string>
+    <string name="recipe_detail_custom_servings_title">Cantidad exacta de porciones</string>
+    <string name="recipe_detail_custom_servings_label">Porciones (1 - 500)</string>
+    <string name="recipe_detail_equiv_stock">≈ %1$s %2$s</string>
+
+    <string name="shopping_est_total_label">Costo estimado lista: %1$s · Pendiente: %2$s</string>
+    <string name="shopping_item_est_cost">Est.: %1$s</string>
+
+    <string name="prod_custom_servings_label">Porciones</string>
+    <string name="prod_custom_batches_label">Lotes</string>
+    <string name="prod_key_ing_unit_label">Unidad</string>
+    <string name="prod_key_ing_converted_fmt">Equivale a %1$s %2$s de receta</string>
+    <string name="prod_suggested_per_portion">Precio sugerido/porc. (+%1$d%%): %2$s</string>
+    <string name="prod_weight_output_line">Peso ingredientes: %1$s · Costo %2$s/kg · Venta %3$s/kg</string>
+    <string name="prod_volume_output_line">Volumen ingredientes: %1$s · Costo %2$s/L · Venta %3$s/L</string>
+    <string name="prod_ing_unit_price_tag">Tarifa: %1$s/%2$s</string>
 </resources>

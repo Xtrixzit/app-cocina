@@ -66,9 +66,11 @@ import com.example.auth.SessionPreferences
 import com.example.data.model.DistributionConfig
 import com.example.data.model.Recipe
 import com.example.data.repository.CookingRepository
+import com.example.settings.AppSettingsPreferences
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
 import com.example.ui.components.CommercialSettingsDialog
+import com.example.ui.components.GuidedTutorialOverlay
 import com.example.ui.components.LicenseActivationDialog
 import com.example.ui.components.NotebookBottomBar
 import com.example.ui.components.PrivacyPolicyDialog
@@ -139,6 +141,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (BuildConfig.DEBUG && intent.hasExtra("FIREBASE_APPCHECK_DEBUG_TOKEN")) {
+            configureAppCheck(this, intent)
+        }
         voiceLaunchState = resolveVoiceLaunchRequest(intent)
     }
 
@@ -344,6 +349,8 @@ fun MainFeatureScreen(
     val chefChatMessages by viewModel.chefChatMessages.collectAsStateWithLifecycle()
     val chefChatRole by viewModel.chefChatRole.collectAsStateWithLifecycle()
     val chefChatSending by viewModel.chefChatSending.collectAsStateWithLifecycle()
+    val guidedTutorialCompleted by AppSettingsPreferences.observeGuidedTutorialCompleted(context)
+        .collectAsStateWithLifecycle()
 
     val selectedRecipe by viewModel.selectedRecipe.collectAsState()
     val targetServings by viewModel.targetServings.collectAsState()
@@ -569,6 +576,7 @@ fun MainFeatureScreen(
     if (showRecipeForm) {
         RecipeFormDialog(
             initialRecipe = recipeFormTarget,
+            pantryItems = pantryItems,
             photoGenState = recipePhotoGenState,
             onGenerateAiPhoto = { title, category, ingredients ->
                 viewModel.generateRecipePhoto(title, category, ingredients)
@@ -628,8 +636,24 @@ fun MainFeatureScreen(
             onImportFullBackupJson = { jsonText, replace ->
                 viewModel.importFullBackupJson(jsonText, replace)
             },
+            onExportAiMarkdown = { onResult ->
+                viewModel.exportAiReadableMarkdown(onResult)
+            },
+            onExportAiCsv = { onResult ->
+                viewModel.exportAiReadableCsv(onResult)
+            },
+            onSyncDriveWithToken = { token ->
+                viewModel.syncReadableInventoryToDriveWithToken(token)
+            },
+            onDriveSyncMessage = { message, isError ->
+                viewModel.reportDriveSyncMessage(message, isError)
+            },
             onActivateLicense = { code ->
                 viewModel.activateLicense(code)
+            },
+            onReplayTutorial = {
+                showSettingsDialog = false
+                AppSettingsPreferences.setGuidedTutorialCompleted(context, false)
             },
             onCheckUpdates = {
                 viewModel.checkUpdatesManual(
@@ -816,6 +840,23 @@ fun MainFeatureScreen(
                 ) {
                     Text(stringResource(R.string.privacy_title))
                 }
+            }
+        )
+    }
+
+    val isLicenseBlocked = !isGuestMode && distributionConfig?.requireLicense == true && !licenseValidated
+    val isUpdateBlocked = forcedUpdateConfig != null
+    if (!guidedTutorialCompleted && !isLicenseBlocked && !isUpdateBlocked) {
+        GuidedTutorialOverlay(
+            onSwitchTab = { tab ->
+                if (selectedRecipe != null) {
+                    viewModel.selectRecipe(null)
+                }
+                selectedTab = tab.coerceIn(0, 4)
+            },
+            onCompleted = {
+                AppSettingsPreferences.setGuidedTutorialCompleted(context, true)
+                selectedTab = 0
             }
         )
     }

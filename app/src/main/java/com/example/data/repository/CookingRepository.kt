@@ -551,7 +551,8 @@ class CookingRepository(
                         it.name.trim().equals(toSave.name.trim(), ignoreCase = true)
                     }
                     if (match != null) {
-                        updatePantryStock(GUEST_USER_ID, match.id, toSave.quantity, isGuestMode = true).getOrThrow()
+                        val qtyInPantryUnit = UnitConverter.convert(toSave.quantity, toSave.unit, match.unit) ?: toSave.quantity
+                        updatePantryStock(GUEST_USER_ID, match.id, qtyInPantryUnit, isGuestMode = true).getOrThrow()
                     } else {
                         savePantryItem(
                             GUEST_USER_ID,
@@ -593,7 +594,8 @@ class CookingRepository(
                     it.name.trim().equals(item.name.trim(), ignoreCase = true)
                 }
                 if (match != null) {
-                    updatePantryStock(uid, match.id, item.quantity, isGuestMode = false).getOrThrow()
+                    val qtyInPantryUnit = UnitConverter.convert(item.quantity, item.unit, match.unit) ?: item.quantity
+                    updatePantryStock(uid, match.id, qtyInPantryUnit, isGuestMode = false).getOrThrow()
                 } else {
                     savePantryItem(
                         uid,
@@ -690,7 +692,8 @@ class CookingRepository(
         itemId: String,
         newQuantity: Double,
         isGuestMode: Boolean,
-        itemName: String? = null
+        itemName: String? = null,
+        itemUnit: String? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val clamped = clampQuantity(newQuantity)
         if (isGuestMode) {
@@ -703,7 +706,10 @@ class CookingRepository(
                         it.name.trim().equals(itemName.trim(), ignoreCase = true)
                     }
                     if (match != null) {
-                        updatePantryStock(GUEST_USER_ID, match.id, clamped, isGuestMode = true).getOrThrow()
+                        val qtyInPantryUnit = if (!itemUnit.isNullOrBlank()) {
+                            UnitConverter.convert(clamped, itemUnit, match.unit) ?: clamped
+                        } else clamped
+                        updatePantryStock(GUEST_USER_ID, match.id, qtyInPantryUnit, isGuestMode = true).getOrThrow()
                     }
                 }
                 Result.success(Unit)
@@ -732,7 +738,10 @@ class CookingRepository(
                     it.name.trim().equals(itemName.trim(), ignoreCase = true)
                 }
                 if (match != null) {
-                    updatePantryStock(uid, match.id, clamped, isGuestMode = false).getOrThrow()
+                    val qtyInPantryUnit = if (!itemUnit.isNullOrBlank()) {
+                        UnitConverter.convert(clamped, itemUnit, match.unit) ?: clamped
+                    } else clamped
+                    updatePantryStock(uid, match.id, qtyInPantryUnit, isGuestMode = false).getOrThrow()
                 }
             }
             Result.success(Unit)
@@ -751,7 +760,7 @@ class CookingRepository(
         isGuestMode: Boolean
     ): Result<Unit> {
         val newQty = (item.quantity + delta).coerceAtLeast(0.0)
-        return updateShoppingItemQuantity(userId, item.id, newQty, isGuestMode, item.name)
+        return updateShoppingItemQuantity(userId, item.id, newQty, isGuestMode, item.name, item.unit)
     }
 
     suspend fun clearPurchasedShoppingItems(
@@ -887,14 +896,14 @@ class CookingRepository(
             var addedCount = 0
 
             for (ingredient in recipe.ingredients) {
-                val neededAmount = Math.round(ingredient.amount * scale * 100.0) / 100.0
+                val neededAmount = Math.round(ingredient.amount * scale * 1000.0) / 1000.0
                 val matching = currentPantry.find {
                     it.name.trim().equals(ingredient.name.trim(), ignoreCase = true)
                 }
                 val available = UnitConverter.availableInTargetUnit(matching, ingredient.unit)
 
-                if (available < neededAmount) {
-                    val shortage = Math.round((neededAmount - available) * 100.0) / 100.0
+                if (available + 0.0001 < neededAmount) {
+                    val shortage = Math.round((neededAmount - available) * 1000.0) / 1000.0
                     val shoppingItem = ShoppingItem(
                         name = ingredient.name,
                         category = ingredient.category,
@@ -1429,7 +1438,7 @@ class CookingRepository(
 
     private fun clampQuantity(value: Double): Double {
         val nonNeg = value.coerceIn(0.0, 1_000_000.0)
-        return Math.round(nonNeg * 100.0) / 100.0
+        return Math.round(nonNeg * 10_000.0) / 10_000.0
     }
 
     private fun toIngredientsList(ingredients: List<RecipeIngredient>): List<Map<String, Any>> {

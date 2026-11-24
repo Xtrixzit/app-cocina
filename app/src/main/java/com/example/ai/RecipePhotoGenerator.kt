@@ -14,6 +14,7 @@ import com.google.firebase.ai.type.AspectRatio
 import com.google.firebase.ai.type.ImageConfig
 import com.google.firebase.ai.type.ImagePart
 import com.google.firebase.ai.type.ImageSize
+import com.google.firebase.ai.type.QuotaExceededException
 import com.google.firebase.ai.type.ResponseModality
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
@@ -22,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.IOException
 
 enum class PhotoAspectOption(
     val aspectRatio: AspectRatio,
@@ -48,6 +50,15 @@ object RecipePhotoGenerator {
     private const val TAG = "RecipePhotoGen"
 
     private val modelCache = mutableMapOf<PhotoAspectOption, GenerativeModel>()
+
+    private val minimalBaselineModel: GenerativeModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-nano-banana-2.1",
+            generationConfig = generationConfig {
+                responseModalities = listOf(ResponseModality.IMAGE)
+            }
+        )
+    }
 
     private fun modelForAspect(aspectOption: PhotoAspectOption): GenerativeModel {
         return synchronized(modelCache) {
@@ -96,6 +107,29 @@ object RecipePhotoGenerator {
             "Strictly NO cartoon, NO illustration, NO artificial plastic look, NO text overlays."
     }
 
+    internal fun classifyPhotoError(loc: Context, err: Throwable): String {
+        val raw = err.localizedMessage.orEmpty()
+        val lower = raw.lowercase()
+        return when {
+            err is TimeoutCancellationException -> loc.getString(R.string.recipe_photo_ai_timeout)
+            err is QuotaExceededException ||
+                lower.contains("quota") ||
+                lower.contains("429") ||
+                lower.contains("billing") ||
+                lower.contains("blaze") ||
+                lower.contains("resource_exhausted") -> loc.getString(R.string.recipe_photo_ai_quota_blaze)
+            lower.contains("403") ||
+                lower.contains("appcheck") ||
+                lower.contains("app check") ||
+                lower.contains("attestation") -> loc.getString(R.string.recipe_photo_ai_appcheck)
+            err is IOException ||
+                lower.contains("unable to resolve host") ||
+                lower.contains("network") -> loc.getString(R.string.recipe_photo_ai_offline)
+            raw.isNotBlank() -> raw
+            else -> loc.getString(R.string.recipe_photo_ai_failed)
+        }
+    }
+
     suspend fun generateRealisticRecipePhoto(
         context: Context,
         title: String,
@@ -113,22 +147,33 @@ object RecipePhotoGenerator {
 
         val prompt = buildPhotorealisticPrompt(trimmedTitle, category, ingredients)
         return try {
-            val response = withTimeout(60_000L) {
-                modelForAspect(aspectOption).generateContent(prompt)
+            val response = try {
+                withTimeout(60_000L) {
+                    modelForAspect(aspectOption).generateContent(prompt)
+                }
+            } catch (primaryErr: TimeoutCancellationException) {
+                throw primaryErr
+            } catch (primaryErr: CancellationException) {
+                throw primaryErr
+            } catch (primaryErr: Exception) {
+                val msg = primaryErr.localizedMessage.orEmpty().lowercase()
+                if (primaryErr is QuotaExceededException || msg.contains("403") || msg.contains("quota") || msg.contains("billing")) {
+                    throw primaryErr
+                }
+                Log.w(TAG, "Custom aspect generation failed; trying minimal 1:1 baseline", primaryErr)
+                withTimeout(60_000L) {
+                    minimalBaselineModel.generateContent(prompt)
+                }
             }
             extractEncodedPhoto(loc, response)
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "AI recipe photo generation timed out", e)
-            Result.failure(
-                IllegalStateException(loc.getString(R.string.recipe_photo_ai_timeout))
-            )
+            Result.failure(IllegalStateException(loc.getString(R.string.recipe_photo_ai_timeout)))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "AI recipe photo generation failed", e)
-            Result.failure(
-                IllegalStateException(e.localizedMessage ?: loc.getString(R.string.recipe_photo_ai_failed))
-            )
+            Result.failure(IllegalStateException(classifyPhotoError(loc, e)))
         }
     }
 
@@ -140,7 +185,7 @@ object RecipePhotoGenerator {
         aspectOption: PhotoAspectOption = PhotoAspectOption.RATIO_4_3
     ): Result<String> {
         val loc = LocaleHelper.localizedContext(context)
-        val sourceBitmap = ImageUtils.decodeImageModelToBitmap(context, sourceImageUrl)
+        val sourceBitmap = ImageUtils.decodeScaledBitmapForAi(context, sourceImageUrl, 768)
             ?: return Result.failure(
                 IllegalArgumentException(loc.getString(R.string.recipe_photo_ai_need_source))
             )
@@ -152,22 +197,33 @@ object RecipePhotoGenerator {
         }
 
         return try {
-            val response = withTimeout(60_000L) {
-                modelForAspect(aspectOption).generateContent(multimodalPrompt)
+            val response = try {
+                withTimeout(60_000L) {
+                    modelForAspect(aspectOption).generateContent(multimodalPrompt)
+                }
+            } catch (primaryErr: TimeoutCancellationException) {
+                throw primaryErr
+            } catch (primaryErr: CancellationException) {
+                throw primaryErr
+            } catch (primaryErr: Exception) {
+                val msg = primaryErr.localizedMessage.orEmpty().lowercase()
+                if (primaryErr is QuotaExceededException || msg.contains("403") || msg.contains("quota") || msg.contains("billing")) {
+                    throw primaryErr
+                }
+                Log.w(TAG, "Custom aspect photo enhancement failed; trying minimal baseline", primaryErr)
+                withTimeout(60_000L) {
+                    minimalBaselineModel.generateContent(multimodalPrompt)
+                }
             }
             extractEncodedPhoto(loc, response)
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "AI photo realism enhancement timed out", e)
-            Result.failure(
-                IllegalStateException(loc.getString(R.string.recipe_photo_ai_timeout))
-            )
+            Result.failure(IllegalStateException(loc.getString(R.string.recipe_photo_ai_timeout)))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "AI photo realism enhancement failed", e)
-            Result.failure(
-                IllegalStateException(e.localizedMessage ?: loc.getString(R.string.recipe_photo_ai_failed))
-            )
+            Result.failure(IllegalStateException(classifyPhotoError(loc, e)))
         }
     }
 

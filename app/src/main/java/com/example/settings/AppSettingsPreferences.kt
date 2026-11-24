@@ -46,6 +46,19 @@ data class PersistedTimerState(
     val isRunning: Boolean = false
 )
 
+data class DriveSyncInfo(
+    val autoSyncEnabled: Boolean = true,
+    val lastSyncMillis: Long = 0L,
+    val folderId: String = "",
+    val docFileId: String = "",
+    val docWebLink: String = "",
+    val sheetFileId: String = "",
+    val sheetWebLink: String = "",
+    val markdownFileId: String = "",
+    val markdownWebLink: String = "",
+    val linkedEmail: String = ""
+)
+
 object AppSettingsPreferences {
     const val PREFS_NAME = "recetario_settings"
     private const val KEY_CURRENCY = "currency_code"
@@ -57,12 +70,25 @@ object AppSettingsPreferences {
     private const val KEY_TIMER_PAUSED_REM = "timer_paused_rem_sec"
     private const val KEY_TIMER_LABEL = "timer_label"
     private const val KEY_TIMER_RUNNING = "timer_running"
+    private const val KEY_DRIVE_AUTO_SYNC = "drive_auto_sync"
+    private const val KEY_DRIVE_LAST_SYNC = "drive_last_sync_millis"
+    private const val KEY_DRIVE_FOLDER_ID = "drive_folder_id"
+    private const val KEY_DRIVE_DOC_ID = "drive_doc_id"
+    private const val KEY_DRIVE_DOC_LINK = "drive_doc_link"
+    private const val KEY_DRIVE_SHEET_ID = "drive_sheet_id"
+    private const val KEY_DRIVE_SHEET_LINK = "drive_sheet_link"
+    private const val KEY_DRIVE_MD_ID = "drive_md_id"
+    private const val KEY_DRIVE_MD_LINK = "drive_md_link"
+    private const val KEY_DRIVE_EMAIL = "drive_linked_email"
+    private const val KEY_GUIDED_TUTORIAL_DONE = "guided_tutorial_completed"
 
     private val _currencyFlow = MutableStateFlow(CurrencyOption.USD)
     private val _marginFlow = MutableStateFlow(30)
     private val _languageFlow = MutableStateFlow(AppLanguage.SYSTEM)
     private val _licenseKeyFlow = MutableStateFlow("")
     private val _timerFlow = MutableStateFlow(PersistedTimerState())
+    private val _driveSyncFlow = MutableStateFlow(DriveSyncInfo())
+    private val _guidedTutorialCompletedFlow = MutableStateFlow(false)
 
     @Volatile
     private var initialized = false
@@ -80,10 +106,27 @@ object AppSettingsPreferences {
                     _languageFlow.value = AppLanguage.fromCode(p.getString(KEY_LANGUAGE, ""))
                     _licenseKeyFlow.value = p.getString(KEY_LICENSE_KEY, "") ?: ""
                     _timerFlow.value = readTimerState(p)
+                    _driveSyncFlow.value = readDriveSyncInfo(p)
+                    _guidedTutorialCompletedFlow.value = p.getBoolean(KEY_GUIDED_TUTORIAL_DONE, false)
                     initialized = true
                 }
             }
         }
+    }
+
+    private fun readDriveSyncInfo(p: SharedPreferences): DriveSyncInfo {
+        return DriveSyncInfo(
+            autoSyncEnabled = p.getBoolean(KEY_DRIVE_AUTO_SYNC, true),
+            lastSyncMillis = p.getLong(KEY_DRIVE_LAST_SYNC, 0L),
+            folderId = p.getString(KEY_DRIVE_FOLDER_ID, "") ?: "",
+            docFileId = p.getString(KEY_DRIVE_DOC_ID, "") ?: "",
+            docWebLink = p.getString(KEY_DRIVE_DOC_LINK, "") ?: "",
+            sheetFileId = p.getString(KEY_DRIVE_SHEET_ID, "") ?: "",
+            sheetWebLink = p.getString(KEY_DRIVE_SHEET_LINK, "") ?: "",
+            markdownFileId = p.getString(KEY_DRIVE_MD_ID, "") ?: "",
+            markdownWebLink = p.getString(KEY_DRIVE_MD_LINK, "") ?: "",
+            linkedEmail = p.getString(KEY_DRIVE_EMAIL, "") ?: ""
+        )
     }
 
     private fun readTimerState(p: SharedPreferences): PersistedTimerState {
@@ -187,6 +230,59 @@ object AppSettingsPreferences {
 
     fun clearTimerState(context: Context) {
         saveTimerState(context, PersistedTimerState())
+    }
+
+    fun observeDriveSyncInfo(context: Context): StateFlow<DriveSyncInfo> {
+        ensureLoaded(context)
+        return _driveSyncFlow.asStateFlow()
+    }
+
+    fun getDriveSyncInfo(context: Context): DriveSyncInfo {
+        ensureLoaded(context)
+        return _driveSyncFlow.value
+    }
+
+    fun setDriveAutoSyncEnabled(context: Context, enabled: Boolean) {
+        ensureLoaded(context)
+        prefs(context).edit().putBoolean(KEY_DRIVE_AUTO_SYNC, enabled).apply()
+        _driveSyncFlow.value = _driveSyncFlow.value.copy(autoSyncEnabled = enabled)
+    }
+
+    fun saveDriveSyncInfo(context: Context, info: DriveSyncInfo) {
+        ensureLoaded(context)
+        prefs(context).edit()
+            .putBoolean(KEY_DRIVE_AUTO_SYNC, info.autoSyncEnabled)
+            .putLong(KEY_DRIVE_LAST_SYNC, info.lastSyncMillis)
+            .putString(KEY_DRIVE_FOLDER_ID, info.folderId)
+            .putString(KEY_DRIVE_DOC_ID, info.docFileId)
+            .putString(KEY_DRIVE_DOC_LINK, info.docWebLink)
+            .putString(KEY_DRIVE_SHEET_ID, info.sheetFileId)
+            .putString(KEY_DRIVE_SHEET_LINK, info.sheetWebLink)
+            .putString(KEY_DRIVE_MD_ID, info.markdownFileId)
+            .putString(KEY_DRIVE_MD_LINK, info.markdownWebLink)
+            .putString(KEY_DRIVE_EMAIL, info.linkedEmail)
+            .apply()
+        _driveSyncFlow.value = info
+    }
+
+    fun clearDriveSyncInfo(context: Context) {
+        saveDriveSyncInfo(context, DriveSyncInfo())
+    }
+
+    fun observeGuidedTutorialCompleted(context: Context): StateFlow<Boolean> {
+        ensureLoaded(context)
+        return _guidedTutorialCompletedFlow.asStateFlow()
+    }
+
+    fun isGuidedTutorialCompleted(context: Context): Boolean {
+        ensureLoaded(context)
+        return _guidedTutorialCompletedFlow.value
+    }
+
+    fun setGuidedTutorialCompleted(context: Context, completed: Boolean) {
+        ensureLoaded(context)
+        prefs(context).edit().putBoolean(KEY_GUIDED_TUTORIAL_DONE, completed).commit()
+        _guidedTutorialCompletedFlow.value = completed
     }
 
     fun suggestedSellingPrice(cost: Double, marginPercent: Int): Double {

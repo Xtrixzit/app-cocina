@@ -18,13 +18,18 @@ import com.example.data.model.Recipe
 import com.example.data.model.RecipeIngredient
 import com.example.data.model.ShoppingItem
 import com.example.data.repository.CookingRepository
+import com.example.data.sync.AiReadableExportFormatter
 import com.example.data.sync.FullBackupManager
+import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppSettingsPreferences
+import com.example.settings.DriveSyncInfo
 import com.example.util.LocaleHelper
 import com.example.util.UnitConverter
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -87,6 +92,17 @@ class MainViewModel(
 
     private val _chefChatSending = MutableStateFlow(false)
     val chefChatSending: StateFlow<Boolean> = _chefChatSending.asStateFlow()
+
+    private val _driveSyncing = MutableStateFlow(false)
+    val driveSyncing: StateFlow<Boolean> = _driveSyncing.asStateFlow()
+
+    private val _driveSyncError = MutableStateFlow<String?>(null)
+    val driveSyncError: StateFlow<String?> = _driveSyncError.asStateFlow()
+
+    val driveSyncInfo: StateFlow<DriveSyncInfo> =
+        AppSettingsPreferences.observeDriveSyncInfo(repository.context)
+
+    private var autoDriveSyncJob: Job? = null
 
     fun generateRecipePhoto(
         title: String,
@@ -339,7 +355,9 @@ class MainViewModel(
     // --- AUTH / LIFECYCLE ---
 
     suspend fun prepareSignOut() {
+        autoDriveSyncJob?.cancel()
         withContext(NonCancellable) {
+            AppSettingsPreferences.clearDriveSyncInfo(repository.context)
             repository.clearSessionOnSignOut()
         }
     }
@@ -359,6 +377,7 @@ class MainViewModel(
                     if (_selectedRecipe.value?.id == recipe.id) {
                         _selectedRecipe.value = recipe
                     }
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_save_recipe, e.localizedMessage ?: ""))
@@ -374,6 +393,7 @@ class MainViewModel(
                         _selectedRecipe.value = null
                     }
                     _userMessage.emit(str(R.string.vm_deleted_recipe))
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_delete, e.localizedMessage ?: ""))
@@ -391,6 +411,7 @@ class MainViewModel(
                         str(R.string.vm_samples_cloud)
                     }
                     _userMessage.emit(msg)
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_samples, e.localizedMessage ?: ""))
@@ -410,6 +431,7 @@ class MainViewModel(
                         str(R.string.vm_saved_pantry_cloud)
                     }
                     _userMessage.emit(msg)
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_save_pantry, e.localizedMessage ?: ""))
@@ -421,6 +443,7 @@ class MainViewModel(
         viewModelScope.launch {
             val newQty = (item.quantity + delta).coerceAtLeast(0.0)
             repository.updatePantryStock(currentUserId, item.id, newQty, isGuestMode)
+                .onSuccess { scheduleAutoDriveSync() }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_update_stock, e.localizedMessage ?: ""))
                 }
@@ -432,6 +455,7 @@ class MainViewModel(
             repository.deletePantryItem(currentUserId, itemId, isGuestMode)
                 .onSuccess {
                     _userMessage.emit(str(R.string.vm_deleted_pantry))
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_delete_pantry, e.localizedMessage ?: ""))
@@ -444,6 +468,7 @@ class MainViewModel(
             repository.importInventory(currentUserId, importedItems, mergeMode, isGuestMode)
                 .onSuccess {
                     _userMessage.emit(str(R.string.vm_import_success, importedItems.size))
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_import, e.localizedMessage ?: ""))
@@ -458,6 +483,7 @@ class MainViewModel(
             repository.saveShoppingItem(currentUserId, item, isGuestMode)
                 .onSuccess {
                     _userMessage.emit(str(R.string.vm_saved_shopping))
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_save, e.localizedMessage ?: ""))
@@ -468,6 +494,7 @@ class MainViewModel(
     fun toggleShoppingItem(itemId: String, isPurchased: Boolean) {
         viewModelScope.launch {
             repository.toggleShoppingItemPurchased(currentUserId, itemId, isPurchased, isGuestMode)
+                .onSuccess { scheduleAutoDriveSync() }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_update_shop, e.localizedMessage ?: ""))
                 }
@@ -477,6 +504,7 @@ class MainViewModel(
     fun deleteShoppingItem(itemId: String) {
         viewModelScope.launch {
             repository.deleteShoppingItem(currentUserId, itemId, isGuestMode)
+                .onSuccess { scheduleAutoDriveSync() }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_delete_shop, e.localizedMessage ?: ""))
                 }
@@ -486,6 +514,7 @@ class MainViewModel(
     fun adjustShoppingItemQuantity(item: ShoppingItem, delta: Double) {
         viewModelScope.launch {
             repository.adjustShoppingItemQuantity(currentUserId, item, delta, isGuestMode)
+                .onSuccess { scheduleAutoDriveSync() }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_update_qty, e.localizedMessage ?: ""))
                 }
@@ -495,6 +524,7 @@ class MainViewModel(
     fun updateShoppingItemQuantity(itemId: String, newQuantity: Double, itemName: String? = null) {
         viewModelScope.launch {
             repository.updateShoppingItemQuantity(currentUserId, itemId, newQuantity, isGuestMode, itemName)
+                .onSuccess { scheduleAutoDriveSync() }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_update_qty, e.localizedMessage ?: ""))
                 }
@@ -506,6 +536,7 @@ class MainViewModel(
             repository.clearPurchasedShoppingItems(currentUserId, items, isGuestMode)
                 .onSuccess {
                     _userMessage.emit(str(R.string.vm_cleared_purchased))
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_save, e.localizedMessage ?: ""))
@@ -518,6 +549,7 @@ class MainViewModel(
             repository.transferPurchasedToPantry(currentUserId, purchased, currentPantry, isGuestMode)
                 .onSuccess {
                     _userMessage.emit(str(R.string.vm_transferred_pantry))
+                    scheduleAutoDriveSync()
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_transfer, e.localizedMessage ?: ""))
@@ -597,6 +629,7 @@ class MainViewModel(
                 ).getOrThrow()
 
                 _userMessage.emit(str(R.string.vm_production_recorded, deductedCount))
+                scheduleAutoDriveSync()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -615,14 +648,14 @@ class MainViewModel(
             try {
                 var addedCount = 0
                 for (ingredient in recipe.ingredients) {
-                    val neededAmount = Math.round(ingredient.amount * scaleFactor * 100.0) / 100.0
+                    val neededAmount = Math.round(ingredient.amount * scaleFactor * 1000.0) / 1000.0
                     val matching = currentPantry.find {
                         it.name.trim().equals(ingredient.name.trim(), ignoreCase = true)
                     }
                     val available = UnitConverter.availableInTargetUnit(matching, ingredient.unit)
 
-                    if (available < neededAmount) {
-                        val shortage = Math.round((neededAmount - available) * 100.0) / 100.0
+                    if (available + 0.0001 < neededAmount) {
+                        val shortage = Math.round((neededAmount - available) * 1000.0) / 1000.0
                         val shoppingItem = ShoppingItem(
                             name = ingredient.name,
                             category = ingredient.category,
@@ -717,6 +750,121 @@ class MainViewModel(
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_import, e.localizedMessage ?: ""))
                 }
+        }
+    }
+
+    fun exportAiReadableMarkdown(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            repository.exportFullBackup(currentUserId, isGuestMode)
+                .onSuccess { payload ->
+                    val md = AiReadableExportFormatter.exportToMarkdown(
+                        context = repository.context,
+                        recipes = payload.recipes,
+                        pantry = payload.pantry,
+                        shopping = payload.shopping,
+                        productionLogs = payload.productionLogs,
+                        currencyCode = payload.currencyCode ?: AppSettingsPreferences.getCurrency(repository.context).code,
+                        marginPercent = payload.marginPercent ?: AppSettingsPreferences.getMarginPercent(repository.context)
+                    )
+                    onResult(md)
+                }
+                .onFailure { e ->
+                    _userMessage.emit(str(R.string.vm_err_import, e.localizedMessage ?: ""))
+                }
+        }
+    }
+
+    fun exportAiReadableCsv(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            repository.exportFullBackup(currentUserId, isGuestMode)
+                .onSuccess { payload ->
+                    val csv = AiReadableExportFormatter.exportToCsv(
+                        context = repository.context,
+                        recipes = payload.recipes,
+                        pantry = payload.pantry,
+                        shopping = payload.shopping
+                    )
+                    onResult(csv)
+                }
+                .onFailure { e ->
+                    _userMessage.emit(str(R.string.vm_err_import, e.localizedMessage ?: ""))
+                }
+        }
+    }
+
+    fun setDriveAutoSyncEnabled(enabled: Boolean) {
+        AppSettingsPreferences.setDriveAutoSyncEnabled(repository.context, enabled)
+        if (enabled && driveSyncInfo.value.lastSyncMillis > 0L) {
+            scheduleAutoDriveSync()
+        }
+    }
+
+    fun reportDriveSyncMessage(message: String, isError: Boolean = false) {
+        if (isError) {
+            _driveSyncError.value = message
+        }
+        viewModelScope.launch {
+            _userMessage.emit(message)
+        }
+    }
+
+    fun syncReadableInventoryToDriveWithToken(
+        accessToken: String,
+        notifyUser: Boolean = true
+    ) {
+        if (_driveSyncing.value) return
+        viewModelScope.launch {
+            _driveSyncing.value = true
+            _driveSyncError.value = null
+            try {
+                val payload = repository.exportFullBackup(currentUserId, isGuestMode).getOrThrow()
+                val res = GoogleDriveSyncRepository.syncReadableFilesToDrive(
+                    context = repository.context,
+                    accessToken = accessToken,
+                    recipes = payload.recipes,
+                    pantry = payload.pantry,
+                    shopping = payload.shopping,
+                    productionLogs = payload.productionLogs,
+                    currencyCode = payload.currencyCode ?: AppSettingsPreferences.getCurrency(repository.context).code,
+                    marginPercent = payload.marginPercent ?: AppSettingsPreferences.getMarginPercent(repository.context),
+                    linkedEmail = currentUserEmail
+                )
+                res.onSuccess {
+                    if (notifyUser) {
+                        _userMessage.emit(str(R.string.drive_ai_sync_success))
+                    }
+                }.onFailure { err ->
+                    val msg = str(R.string.drive_ai_sync_error, err.localizedMessage ?: "")
+                    _driveSyncError.value = msg
+                    if (notifyUser) {
+                        _userMessage.emit(msg)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val msg = str(R.string.drive_ai_sync_error, e.localizedMessage ?: "")
+                _driveSyncError.value = msg
+                if (notifyUser) {
+                    _userMessage.emit(msg)
+                }
+            } finally {
+                _driveSyncing.value = false
+            }
+        }
+    }
+
+    private fun scheduleAutoDriveSync() {
+        val info = AppSettingsPreferences.getDriveSyncInfo(repository.context)
+        if (!info.autoSyncEnabled || info.lastSyncMillis <= 0L) return
+
+        autoDriveSyncJob?.cancel()
+        autoDriveSyncJob = viewModelScope.launch {
+            delay(2_200L)
+            val silentToken = GoogleDriveSyncRepository.trySilentAccessToken(repository.context)
+            if (!silentToken.isNullOrBlank()) {
+                syncReadableInventoryToDriveWithToken(accessToken = silentToken, notifyUser = false)
+            }
         }
     }
 

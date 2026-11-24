@@ -99,8 +99,8 @@ import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
 import com.example.util.UnitConverter
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,9 +121,17 @@ fun ProductionScreen(
 
     var calculationMode by remember { mutableIntStateOf(0) }
     var targetServings by remember { mutableIntStateOf(selectedRecipe?.servings ?: 4) }
+    var customServingsText by remember { mutableStateOf((selectedRecipe?.servings ?: 4).toString()) }
     var selectedIngredientIndex by remember { mutableIntStateOf(0) }
-    var ingredientAvailableAmountText by remember { mutableStateOf("") }
-    var batchCount by remember { mutableIntStateOf(1) }
+    var ingredientAvailableAmountText by remember {
+        mutableStateOf(
+            selectedRecipe?.ingredients?.firstOrNull()?.let { UnitConverter.formatQuantity(it.amount) } ?: ""
+        )
+    }
+    var selectedIngredientInputUnit by remember {
+        mutableStateOf(selectedRecipe?.ingredients?.firstOrNull()?.unit ?: "g")
+    }
+    var batchMultiplierText by remember { mutableStateOf("1") }
 
     var showDeductConfirmDialog by remember { mutableStateOf(false) }
 
@@ -259,11 +267,12 @@ fun ProductionScreen(
                                 val selectThisRecipe = {
                                     selectedRecipe = recipe
                                     targetServings = recipe.servings
-                                    batchCount = 1
+                                    customServingsText = recipe.servings.toString()
+                                    batchMultiplierText = "1"
                                     selectedIngredientIndex = 0
-                                    ingredientAvailableAmountText = if (recipe.ingredients.isNotEmpty()) {
-                                        recipe.ingredients[0].amount.toString()
-                                    } else ""
+                                    val firstIng = recipe.ingredients.firstOrNull()
+                                    ingredientAvailableAmountText = firstIng?.let { UnitConverter.formatQuantity(it.amount) } ?: ""
+                                    selectedIngredientInputUnit = firstIng?.unit ?: "g"
                                 }
 
                                 Card(
@@ -427,21 +436,26 @@ fun ProductionScreen(
                     }
                     1 -> {
                         val ing = recipe.ingredients.getOrNull(selectedIngredientIndex)
-                        val avail = ingredientAvailableAmountText.toDoubleOrNull() ?: 0.0
-                        if (ing != null && ing.amount > 0.0 && avail > 0.0) {
-                            avail / ing.amount
+                        val rawAvail = UnitConverter.parseDecimal(ingredientAvailableAmountText) ?: 0.0
+                        val availInRecipeUnit = if (ing != null && rawAvail > 0.0) {
+                            UnitConverter.convert(rawAvail, selectedIngredientInputUnit, ing.unit) ?: rawAvail
+                        } else 0.0
+                        if (ing != null && ing.amount > 0.0 && availInRecipeUnit > 0.0) {
+                            availInRecipeUnit / ing.amount
                         } else 1.0
                     }
-                    2 -> batchCount.toDouble().coerceAtLeast(1.0)
+                    2 -> (UnitConverter.parseDecimal(batchMultiplierText) ?: 1.0).coerceAtLeast(0.1)
                     else -> 1.0
                 }
 
-                val calculatedTotalUnits = Math.round(recipe.servings * scaleFactor * 10.0) / 10.0
+                val calculatedTotalUnits = Math.round(recipe.servings * scaleFactor * 100.0) / 100.0
+                val roundedTotalUnits = calculatedTotalUnits.roundToInt().coerceAtLeast(1)
 
                 data class ProductionRow(
                     val ingredient: RecipeIngredient,
                     val baseAmount: Double,
                     val requiredAmount: Double,
+                    val pantryItem: PantryItem?,
                     val pantryStock: Double,
                     val shortage: Double,
                     val unitCost: Double,
@@ -452,7 +466,7 @@ fun ProductionScreen(
                 var missingIngredientsCount = 0
 
                 val productionRows = recipe.ingredients.map { ing ->
-                    val required = Math.round(ing.amount * scaleFactor * 100.0) / 100.0
+                    val required = Math.round(ing.amount * scaleFactor * 1000.0) / 1000.0
                     val pantryItem = pantryItems.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
                     val stockConverted = UnitConverter.availableInTargetUnit(pantryItem, ing.unit)
                     val shortage = (required - stockConverted).coerceAtLeast(0.0)
@@ -475,6 +489,7 @@ fun ProductionScreen(
                         ingredient = ing,
                         baseAmount = ing.amount,
                         requiredAmount = required,
+                        pantryItem = pantryItem,
                         pantryStock = stockConverted,
                         shortage = shortage,
                         unitCost = effectiveUnitCost,
@@ -484,7 +499,13 @@ fun ProductionScreen(
 
                 val costPerUnit = if (calculatedTotalUnits > 0) totalProductionCost / calculatedTotalUnits else 0.0
                 val suggestedSalePrice = AppSettingsPreferences.suggestedSellingPrice(totalProductionCost, marginPercent)
+                val suggestedSalePerPortion = if (calculatedTotalUnits > 0) suggestedSalePrice / calculatedTotalUnits else 0.0
                 val estimatedProfit = AppSettingsPreferences.estimatedProfit(totalProductionCost, marginPercent)
+                val (totalGrams, totalMl) = UnitConverter.sumMassAndVolume(
+                    productionRows.map { it.requiredAmount to it.ingredient.unit }
+                )
+                val totalKg = totalGrams / 1000.0
+                val totalLiters = totalMl / 1000.0
                 val allInStock = missingIngredientsCount == 0
 
                 LazyColumn(
@@ -623,34 +644,65 @@ fun ProductionScreen(
 
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 FilledTonalIconButton(
-                                                    onClick = { targetServings = (targetServings - 5).coerceAtLeast(1) },
+                                                    onClick = {
+                                                        targetServings = (targetServings - 5).coerceAtLeast(1)
+                                                        customServingsText = targetServings.toString()
+                                                    },
                                                     modifier = Modifier.size(36.dp)
                                                 ) {
                                                     Text("-5", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                                 }
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 FilledTonalIconButton(
-                                                    onClick = { targetServings = (targetServings - 1).coerceAtLeast(1) },
+                                                    onClick = {
+                                                        targetServings = (targetServings - 1).coerceAtLeast(1)
+                                                        customServingsText = targetServings.toString()
+                                                    },
                                                     modifier = Modifier.size(36.dp)
                                                 ) {
                                                     Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.action_less))
                                                 }
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 FilledTonalIconButton(
-                                                    onClick = { targetServings = (targetServings + 1).coerceAtMost(500) },
+                                                    onClick = {
+                                                        targetServings = (targetServings + 1).coerceAtMost(2000)
+                                                        customServingsText = targetServings.toString()
+                                                    },
                                                     modifier = Modifier.size(36.dp)
                                                 ) {
                                                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_more))
                                                 }
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 FilledTonalIconButton(
-                                                    onClick = { targetServings = (targetServings + 5).coerceAtMost(500) },
+                                                    onClick = {
+                                                        targetServings = (targetServings + 5).coerceAtMost(2000)
+                                                        customServingsText = targetServings.toString()
+                                                    },
                                                     modifier = Modifier.size(36.dp)
                                                 ) {
                                                     Text("+5", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                                 }
                                             }
                                         }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        OutlinedTextField(
+                                            value = customServingsText,
+                                            onValueChange = { raw ->
+                                                customServingsText = raw
+                                                val parsed = raw.trim().toIntOrNull()
+                                                if (parsed != null && parsed >= 1) {
+                                                    targetServings = parsed.coerceAtMost(2000)
+                                                }
+                                            },
+                                            label = { Text(stringResource(R.string.prod_custom_servings_label)) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.55f)
+                                                .testTag("production_servings_input")
+                                        )
 
                                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -669,7 +721,10 @@ fun ProductionScreen(
                                                 val units = recipe.servings * m
                                                 PostItFilterChip(
                                                     selected = targetServings == units,
-                                                    onClick = { targetServings = units },
+                                                    onClick = {
+                                                        targetServings = units
+                                                        customServingsText = units.toString()
+                                                    },
                                                     text = "${m}x ($units)",
                                                     selectedColor = PostItYellow
                                                 )
@@ -678,8 +733,14 @@ fun ProductionScreen(
                                     }
                                     1 -> {
                                         var ingMenuExpanded by remember { mutableStateOf(false) }
+                                        var ingUnitMenuExpanded by remember { mutableStateOf(false) }
                                         val currentIng = recipe.ingredients.getOrNull(selectedIngredientIndex)
-                                        val currentIngUnitLabel = currentIng?.let { LocalizedLabels.unit(context, it.unit) } ?: ""
+                                        val currentIngUnitLabel = LocalizedLabels.unit(context, selectedIngredientInputUnit)
+                                        val compatKeyUnits = currentIng?.let { UnitConverter.compatibleUnitsFor(it.unit) } ?: listOf("g")
+                                        val rawAvail = UnitConverter.parseDecimal(ingredientAvailableAmountText) ?: 0.0
+                                        val convertedAvail = if (currentIng != null && rawAvail > 0.0) {
+                                            UnitConverter.convert(rawAvail, selectedIngredientInputUnit, currentIng.unit)
+                                        } else null
 
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text(
@@ -715,7 +776,8 @@ fun ProductionScreen(
                                                             },
                                                             onClick = {
                                                                 selectedIngredientIndex = i
-                                                                ingredientAvailableAmountText = ing.amount.toString()
+                                                                ingredientAvailableAmountText = UnitConverter.formatQuantity(ing.amount)
+                                                                selectedIngredientInputUnit = ing.unit
                                                                 ingMenuExpanded = false
                                                             }
                                                         )
@@ -733,12 +795,75 @@ fun ProductionScreen(
                                                     onValueChange = { ingredientAvailableAmountText = it },
                                                     label = { Text(stringResource(R.string.prod_key_ing_avail, currentIngUnitLabel)) },
                                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                                    modifier = Modifier.weight(1f),
+                                                    modifier = Modifier
+                                                        .weight(1.2f)
+                                                        .testTag("production_key_ing_amount"),
                                                     singleLine = true
                                                 )
 
+                                                ExposedDropdownMenuBox(
+                                                    expanded = ingUnitMenuExpanded,
+                                                    onExpandedChange = { ingUnitMenuExpanded = it },
+                                                    modifier = Modifier.weight(0.9f)
+                                                ) {
+                                                    OutlinedTextField(
+                                                        value = currentIngUnitLabel,
+                                                        onValueChange = {},
+                                                        readOnly = true,
+                                                        label = { Text(stringResource(R.string.prod_key_ing_unit_label)) },
+                                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = ingUnitMenuExpanded) },
+                                                        modifier = Modifier
+                                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                                                            .testTag("production_key_ing_unit"),
+                                                        singleLine = true
+                                                    )
+                                                    ExposedDropdownMenu(
+                                                        expanded = ingUnitMenuExpanded,
+                                                        onDismissRequest = { ingUnitMenuExpanded = false }
+                                                    ) {
+                                                        compatKeyUnits.forEach { cu ->
+                                                            DropdownMenuItem(
+                                                                text = { Text(LocalizedLabels.unit(context, cu)) },
+                                                                onClick = {
+                                                                    val parsedNow = UnitConverter.parseDecimal(ingredientAvailableAmountText)
+                                                                    val convertedNow = parsedNow?.let {
+                                                                        UnitConverter.convert(it, selectedIngredientInputUnit, cu)
+                                                                    }
+                                                                    if (convertedNow != null) {
+                                                                        ingredientAvailableAmountText = UnitConverter.formatQuantity(convertedNow)
+                                                                    }
+                                                                    selectedIngredientInputUnit = cu
+                                                                    ingUnitMenuExpanded = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (currentIng != null && convertedAvail != null &&
+                                                    !selectedIngredientInputUnit.equals(currentIng.unit, ignoreCase = true)
+                                                ) {
+                                                    Text(
+                                                        text = stringResource(
+                                                            R.string.prod_key_ing_converted_fmt,
+                                                            formatProdQty(convertedAvail),
+                                                            LocalizedLabels.unit(context, currentIng.unit)
+                                                        ),
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                } else {
+                                                    Spacer(modifier = Modifier.width(1.dp))
+                                                }
+
                                                 Text(
-                                                    text = stringResource(R.string.prod_yields_approx, calculatedTotalUnits.toInt()),
+                                                    text = stringResource(R.string.prod_yields_approx, roundedTotalUnits),
                                                     fontFamily = CaveatFontFamily,
                                                     fontSize = 20.sp,
                                                     fontWeight = FontWeight.Bold,
@@ -748,46 +873,68 @@ fun ProductionScreen(
                                         }
                                     }
                                     2 -> {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = stringResource(R.string.prod_batches_title),
-                                                    fontFamily = PatrickHandFontFamily,
-                                                    fontSize = 17.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = stringResource(
-                                                        R.string.prod_batches_summary,
-                                                        batchCount,
-                                                        recipe.servings * batchCount
-                                                    ),
-                                                    fontFamily = CaveatFontFamily,
-                                                    fontSize = 26.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
+                                        val currentBatchVal = (UnitConverter.parseDecimal(batchMultiplierText) ?: 1.0).coerceAtLeast(0.1)
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column {
+                                                    Text(
+                                                        text = stringResource(R.string.prod_batches_title),
+                                                        fontFamily = PatrickHandFontFamily,
+                                                        fontSize = 17.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = stringResource(
+                                                            R.string.prod_batches_summary,
+                                                            roundedTotalUnits.let {
+                                                                if (currentBatchVal % 1.0 == 0.0) currentBatchVal.toInt() else roundedTotalUnits
+                                                            },
+                                                            roundedTotalUnits
+                                                        ),
+                                                        fontFamily = CaveatFontFamily,
+                                                        fontSize = 24.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    FilledTonalIconButton(
+                                                        onClick = {
+                                                            val next = (currentBatchVal - 0.5).coerceAtLeast(0.5)
+                                                            batchMultiplierText = UnitConverter.formatQuantity(next)
+                                                        },
+                                                        modifier = Modifier.size(38.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.action_less))
+                                                    }
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    FilledTonalIconButton(
+                                                        onClick = {
+                                                            val next = (currentBatchVal + 0.5).coerceAtMost(200.0)
+                                                            batchMultiplierText = UnitConverter.formatQuantity(next)
+                                                        },
+                                                        modifier = Modifier.size(38.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_more))
+                                                    }
+                                                }
                                             }
 
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                FilledTonalIconButton(
-                                                    onClick = { batchCount = (batchCount - 1).coerceAtLeast(1) },
-                                                    modifier = Modifier.size(38.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.action_less))
-                                                }
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                FilledTonalIconButton(
-                                                    onClick = { batchCount = (batchCount + 1).coerceAtMost(50) },
-                                                    modifier = Modifier.size(38.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_more))
-                                                }
-                                            }
+                                            OutlinedTextField(
+                                                value = batchMultiplierText,
+                                                onValueChange = { batchMultiplierText = it },
+                                                label = { Text(stringResource(R.string.prod_custom_batches_label)) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                singleLine = true,
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.55f)
+                                                    .testTag("production_batches_input")
+                                            )
                                         }
                                     }
                                 }
@@ -846,6 +993,45 @@ fun ProductionScreen(
                                                 fontWeight = FontWeight.Bold,
                                                 color = StockGreen
                                             )
+                                            if (suggestedSalePerPortion > 0.0) {
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.prod_suggested_per_portion,
+                                                        marginPercent,
+                                                        AppSettingsPreferences.formatMoney(suggestedSalePerPortion, currency)
+                                                    ),
+                                                    fontFamily = PatrickHandFontFamily,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            if (totalKg >= 0.01) {
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.prod_weight_output_line,
+                                                        "${UnitConverter.formatQuantity(totalKg)} kg",
+                                                        AppSettingsPreferences.formatMoney(totalProductionCost / totalKg, currency),
+                                                        AppSettingsPreferences.formatMoney(suggestedSalePrice / totalKg, currency)
+                                                    ),
+                                                    fontFamily = PatrickHandFontFamily,
+                                                    fontSize = 13.sp,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                            if (totalLiters >= 0.01) {
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.prod_volume_output_line,
+                                                        "${UnitConverter.formatQuantity(totalLiters)} L",
+                                                        AppSettingsPreferences.formatMoney(totalProductionCost / totalLiters, currency),
+                                                        AppSettingsPreferences.formatMoney(suggestedSalePrice / totalLiters, currency)
+                                                    ),
+                                                    fontFamily = PatrickHandFontFamily,
+                                                    fontSize = 13.sp,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
                                         }
                                     }
 
@@ -881,7 +1067,7 @@ fun ProductionScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                val targetUnitsLabel = stringResource(R.string.prod_servings_count, calculatedTotalUnits.toInt())
+                                val targetUnitsLabel = stringResource(R.string.prod_servings_count, roundedTotalUnits)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1037,6 +1223,18 @@ fun ProductionScreen(
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.primary
                                         )
+                                        if (row.unitCost > 0.0) {
+                                            Text(
+                                                text = stringResource(
+                                                    R.string.prod_ing_unit_price_tag,
+                                                    AppSettingsPreferences.formatMoney(row.unitCost, currency, forceFourDecimalsIfTiny = true),
+                                                    unitLabel
+                                                ),
+                                                fontFamily = PatrickHandFontFamily,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                         if (row.lineCost > 0.0) {
                                             Text(
                                                 text = stringResource(
@@ -1045,7 +1243,8 @@ fun ProductionScreen(
                                                 ),
                                                 fontFamily = PatrickHandFontFamily,
                                                 fontSize = 13.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                fontWeight = FontWeight.Bold,
+                                                color = StockGreen
                                             )
                                         }
                                     }
@@ -1054,6 +1253,15 @@ fun ProductionScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                                 Spacer(modifier = Modifier.height(6.dp))
+
+                                val stockDisplayStr = if (row.pantryItem != null &&
+                                    !row.pantryItem.unit.trim().equals(row.ingredient.unit.trim(), ignoreCase = true) &&
+                                    row.pantryItem.quantity > 0.0
+                                ) {
+                                    "$stockFormatted $unitLabel (${formatProdQty(row.pantryItem.quantity)} ${LocalizedLabels.unit(context, row.pantryItem.unit)})"
+                                } else {
+                                    "$stockFormatted $unitLabel"
+                                }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1069,7 +1277,7 @@ fun ProductionScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = stringResource(R.string.prod_ing_in_pantry, "$stockFormatted $unitLabel"),
+                                            text = stringResource(R.string.prod_ing_in_pantry, stockDisplayStr),
                                             fontFamily = PatrickHandFontFamily,
                                             fontSize = 14.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1112,7 +1320,7 @@ fun ProductionScreen(
                         },
                         text = {
                             Text(
-                                text = stringResource(R.string.prod_confirm_body, calculatedTotalUnits.toString(), recipe.title),
+                                text = stringResource(R.string.prod_confirm_body, formatProdQty(calculatedTotalUnits), recipe.title),
                                 fontFamily = PatrickHandFontFamily,
                                 fontSize = 16.sp
                             )
@@ -1124,7 +1332,7 @@ fun ProductionScreen(
                                         recipe = recipe,
                                         scaleFactor = scaleFactor,
                                         currentPantry = pantryItems,
-                                        targetServings = calculatedTotalUnits.toInt().coerceAtLeast(1)
+                                        targetServings = roundedTotalUnits
                                     )
                                     showDeductConfirmDialog = false
                                 },
@@ -1145,10 +1353,4 @@ fun ProductionScreen(
     }
 }
 
-private fun formatProdQty(value: Double): String {
-    return if (value % 1.0 == 0.0) {
-        value.toInt().toString()
-    } else {
-        String.format(Locale.US, "%.2f", value)
-    }
-}
+private fun formatProdQty(value: Double): String = UnitConverter.formatQuantity(value)

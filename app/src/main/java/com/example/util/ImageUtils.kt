@@ -148,34 +148,87 @@ object ImageUtils {
     }
 
     suspend fun decodeImageModelToBitmap(context: Context, imageUrl: String): Bitmap? =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val trimmed = imageUrl.trim()
-            if (trimmed.isBlank()) return@withContext null
-            try {
-                resolveBundledDrawableOrNull(trimmed)?.let { resId ->
-                    return@withContext BitmapFactory.decodeResource(context.resources, resId)
+        decodeScaledBitmapForAi(context, imageUrl, maxDimensionPx = 1024)
+
+    suspend fun decodeScaledBitmapForAi(
+        context: Context,
+        imageUrl: String,
+        maxDimensionPx: Int = 768
+    ): Bitmap? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val trimmed = imageUrl.trim()
+        if (trimmed.isBlank()) return@withContext null
+        try {
+            val raw: Bitmap? = when {
+                resolveBundledDrawableOrNull(trimmed) != null -> {
+                    val resId = resolveBundledDrawableOrNull(trimmed)!!
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeResource(context.resources, resId, bounds)
+                    val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
+                    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                    BitmapFactory.decodeResource(context.resources, resId, opts)
                 }
-                if (trimmed.startsWith("data:image", ignoreCase = true) && trimmed.contains("base64,")) {
+                trimmed.startsWith("data:image", ignoreCase = true) && trimmed.contains("base64,") -> {
                     val bytes = Base64.decode(trimmed.substringAfter("base64,"), Base64.DEFAULT)
-                    return@withContext BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                    val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
+                    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
                 }
-                if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+                trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> {
                     val conn = java.net.URL(trimmed).openConnection().apply {
                         connectTimeout = 8000
                         readTimeout = 8000
                     }
-                    conn.getInputStream().use { stream ->
-                        return@withContext BitmapFactory.decodeStream(stream)
+                    val bytes = conn.getInputStream().use { it.readBytes() }
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                    val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
+                    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                }
+                else -> {
+                    val parsedUri = Uri.parse(trimmed)
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    context.contentResolver.openInputStream(parsedUri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream, null, bounds)
+                    }
+                    val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
+                    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                    context.contentResolver.openInputStream(parsedUri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream, null, opts)
                     }
                 }
-                val parsedUri = Uri.parse(trimmed)
-                context.contentResolver.openInputStream(parsedUri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
-            } catch (_: Exception) {
-                null
             }
+            raw?.let { bmp ->
+                val scaled = scaleBitmapMaxDimension(bmp, maxDimensionPx)
+                if (scaled !== bmp && !bmp.isRecycled) {
+                    bmp.recycle()
+                }
+                scaled
+            }
+        } catch (_: Exception) {
+            null
         }
+    }
+
+    private fun computeInSampleSize(rawWidth: Int, rawHeight: Int, maxDim: Int): Int {
+        if (rawWidth <= 0 || rawHeight <= 0 || maxDim <= 0) return 1
+        var sample = 1
+        while ((rawWidth / sample) > maxDim * 2 || (rawHeight / sample) > maxDim * 2) {
+            sample *= 2
+        }
+        return sample
+    }
+
+    fun scaleBitmapMaxDimension(source: Bitmap, maxDimensionPx: Int = 640): Bitmap {
+        val maxSide = max(source.width, source.height)
+        if (maxSide <= maxDimensionPx || maxDimensionPx <= 0) return source
+        val ratio = maxDimensionPx.toFloat() / maxSide.toFloat()
+        val targetW = (source.width * ratio).toInt().coerceAtLeast(1)
+        val targetH = (source.height * ratio).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(source, targetW, targetH, true)
+    }
 
     /**
      * Converts bundled referential photo keys (`res://...`), portable data URIs (`data:image/...`),

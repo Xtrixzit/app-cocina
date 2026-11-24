@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,15 +19,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,12 +67,15 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.DistributionConfig
+import com.example.data.sync.DriveAuthStep
+import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppLanguage
 import com.example.settings.AppSettingsPreferences
 import com.example.settings.CurrencyOption
 import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.StockGreen
 import com.example.util.LocaleHelper
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,13 +89,19 @@ fun CommercialSettingsDialog(
     onMigrateGuestToCloud: () -> Unit,
     onExportFullBackupJson: (onResult: (String) -> Unit) -> Unit,
     onImportFullBackupJson: (String, Boolean) -> Unit,
+    onExportAiMarkdown: (onResult: (String) -> Unit) -> Unit = {},
+    onExportAiCsv: (onResult: (String) -> Unit) -> Unit = {},
+    onSyncDriveWithToken: (String) -> Unit = {},
+    onDriveSyncMessage: (String, Boolean) -> Unit = { _, _ -> },
     onActivateLicense: (String) -> Unit,
+    onReplayTutorial: () -> Unit = {},
     onCheckUpdates: () -> Unit,
     onShowPrivacyPolicy: () -> Unit,
     onDeleteAccount: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val coroutineScope = rememberCoroutineScope()
 
     val currentLanguage by AppSettingsPreferences.observeLanguage(context).collectAsStateWithLifecycle()
     val currentCurrency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
@@ -99,6 +114,7 @@ fun CommercialSettingsDialog(
     var licenseInput by remember(savedLicense) { mutableStateOf(savedLicense) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    var pendingExportText by remember { mutableStateOf<String?>(null) }
 
     val exportFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -112,6 +128,53 @@ fun CommercialSettingsDialog(
                 }
             } catch (_: Exception) {
             }
+        }
+    }
+
+    val exportMdLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri ->
+        val txt = pendingExportText
+        pendingExportText = null
+        if (uri != null && !txt.isNullOrBlank()) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(txt.toByteArray(Charsets.UTF_8))
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    val exportCsvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        val txt = pendingExportText
+        pendingExportText = null
+        if (uri != null && !txt.isNullOrBlank()) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(txt.toByteArray(Charsets.UTF_8))
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    val driveConsentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { res ->
+        if (res.resultCode == Activity.RESULT_OK && res.data != null) {
+            GoogleDriveSyncRepository.extractTokenFromConsentResult(context, res.data)
+                .onSuccess { token -> onSyncDriveWithToken(token) }
+                .onFailure { err ->
+                    onDriveSyncMessage(
+                        context.getString(R.string.drive_ai_sync_error, err.localizedMessage ?: ""),
+                        true
+                    )
+                }
+        } else {
+            onDriveSyncMessage(context.getString(R.string.drive_ai_sync_cancelled), false)
         }
     }
 
@@ -255,6 +318,76 @@ fun CommercialSettingsDialog(
 
                 OutlinedButton(
                     onClick = {
+                        val host = activity ?: return@OutlinedButton
+                        coroutineScope.launch {
+                            when (val step = GoogleDriveSyncRepository.requestDriveAuthorization(host)) {
+                                is DriveAuthStep.TokenReady -> onSyncDriveWithToken(step.accessToken)
+                                is DriveAuthStep.NeedsConsent -> {
+                                    try {
+                                        driveConsentLauncher.launch(
+                                            IntentSenderRequest.Builder(step.pendingIntent.intentSender).build()
+                                        )
+                                    } catch (e: Exception) {
+                                        onDriveSyncMessage(
+                                            context.getString(R.string.drive_ai_sync_error, e.localizedMessage ?: ""),
+                                            true
+                                        )
+                                    }
+                                }
+                                is DriveAuthStep.Failed -> {
+                                    onDriveSyncMessage(
+                                        context.getString(R.string.drive_ai_sync_error, step.message),
+                                        true
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_sync_drive_button")
+                ) {
+                    Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.settings_sync_drive_btn))
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onExportAiMarkdown { md ->
+                            pendingExportText = md
+                            val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                            exportMdLauncher.launch("recetario_ia_$stamp.md")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_export_md_button")
+                ) {
+                    Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.settings_export_md_btn))
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onExportAiCsv { csv ->
+                            pendingExportText = csv
+                            val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                            exportCsvLauncher.launch("recetario_inventario_$stamp.csv")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_export_csv_button")
+                ) {
+                    Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.settings_export_csv_btn))
+                }
+
+                OutlinedButton(
+                    onClick = {
                         onExportFullBackupJson { json ->
                             pendingExportJson = json
                             val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
@@ -349,7 +482,18 @@ fun CommercialSettingsDialog(
 
                 HorizontalDivider()
 
-                // 6. Updates & Privacy & Account Deletion
+                // 6. Replay Tutorial, Updates, Privacy & Account Deletion
+                OutlinedButton(
+                    onClick = onReplayTutorial,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_replay_tutorial_button")
+                ) {
+                    Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.settings_replay_tutorial_btn))
+                }
+
                 OutlinedButton(
                     onClick = onCheckUpdates,
                     modifier = Modifier.fillMaxWidth()
