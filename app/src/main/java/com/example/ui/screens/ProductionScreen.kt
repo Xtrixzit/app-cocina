@@ -509,6 +509,7 @@ fun ProductionScreen(
                 val allInStock = missingIngredientsCount == 0
 
                 LazyColumn(
+                    modifier = Modifier.testTag("production_lazy_list"),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {

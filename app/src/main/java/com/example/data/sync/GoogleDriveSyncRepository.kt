@@ -36,6 +36,11 @@ sealed interface DriveAuthStep {
     data class Failed(val message: String) : DriveAuthStep
 }
 
+class DriveApiDisabledException(
+    val activationUrl: String,
+    message: String
+) : IllegalStateException(message)
+
 /**
  * Links to the user's Google Drive using Google Identity Services [AuthorizationClient]
  * with least-privilege `drive.file` scope, creating and updating AI-readable Google Docs,
@@ -140,7 +145,7 @@ object GoogleDriveSyncRepository {
             val existing = AppSettingsPreferences.getDriveSyncInfo(context)
             val now = System.currentTimeMillis()
 
-            val folder = ensureRecetarioFolder(accessToken, existing.folderId)
+            val folder = ensureRecetarioFolder(loc, accessToken, existing.folderId)
 
             val docTitle = loc.getString(R.string.drive_ai_doc_name)
             val docHtml = AiReadableExportFormatter.exportToGoogleDocHtml(
@@ -154,6 +159,7 @@ object GoogleDriveSyncRepository {
                 timestampMillis = now
             )
             val docUploaded = upsertMultipartFile(
+                loc = loc,
                 accessToken = accessToken,
                 existingFileId = existing.docFileId,
                 folderId = folder.id,
@@ -172,6 +178,7 @@ object GoogleDriveSyncRepository {
                 shopping = shopping
             )
             val sheetUploaded = upsertMultipartFile(
+                loc = loc,
                 accessToken = accessToken,
                 existingFileId = existing.sheetFileId,
                 folderId = folder.id,
@@ -194,6 +201,7 @@ object GoogleDriveSyncRepository {
                 timestampMillis = now
             )
             val mdUploaded = upsertMultipartFile(
+                loc = loc,
                 accessToken = accessToken,
                 existingFileId = existing.markdownFileId,
                 folderId = folder.id,
@@ -231,7 +239,40 @@ object GoogleDriveSyncRepository {
         val webViewLink: String
     )
 
-    private fun ensureRecetarioFolder(accessToken: String, cachedFolderId: String): DriveFileMeta {
+    internal fun buildFriendlyDriveHttpError(
+        loc: Context,
+        httpCode: Int,
+        bodyStr: String
+    ): IllegalStateException {
+        val lower = bodyStr.lowercase()
+        val isServiceDisabled = lower.contains("service_disabled") ||
+            lower.contains("accessnotconfigured") ||
+            lower.contains("has not been used in project") ||
+            lower.contains("drive.googleapis.com")
+        if (isServiceDisabled) {
+            val urlMatch = Regex("https://console\\.developers\\.google\\.com[^\\s\"']+").find(bodyStr)?.value
+            val projectId = Regex("project[=\\s]+(\\d{6,20})").find(bodyStr)?.groupValues?.getOrNull(1)
+                ?: "1034453362537"
+            val activationUrl = urlMatch
+                ?: "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=$projectId"
+            return DriveApiDisabledException(
+                activationUrl = activationUrl,
+                message = loc.getString(R.string.drive_api_disabled_friendly, projectId)
+            )
+        }
+        if (httpCode == 401 || lower.contains("insufficientpermissions") || lower.contains("unauthenticated")) {
+            return IllegalStateException(loc.getString(R.string.drive_perm_expired_friendly))
+        }
+        val shortJsonMsg = try {
+            JSONObject(bodyStr).optJSONObject("error")?.optString("message").orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
+        val cleanDetail = shortJsonMsg.ifBlank { "HTTP $httpCode" }
+        return IllegalStateException(cleanDetail)
+    }
+
+    private fun ensureRecetarioFolder(loc: Context, accessToken: String, cachedFolderId: String): DriveFileMeta {
         if (cachedFolderId.isNotBlank()) {
             verifyExistingFile(accessToken, cachedFolderId)?.let { return it }
         }
@@ -252,7 +293,7 @@ object GoogleDriveSyncRepository {
         httpClient.newCall(req).execute().use { resp ->
             val bodyStr = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                throw IllegalStateException("Drive folder error (${resp.code}): $bodyStr")
+                throw buildFriendlyDriveHttpError(loc, resp.code, bodyStr)
             }
             val json = JSONObject(bodyStr)
             return DriveFileMeta(
@@ -300,6 +341,7 @@ object GoogleDriveSyncRepository {
     }
 
     private fun upsertMultipartFile(
+        loc: Context,
         accessToken: String,
         existingFileId: String,
         folderId: String,
@@ -352,7 +394,7 @@ object GoogleDriveSyncRepository {
         httpClient.newCall(request).execute().use { resp ->
             val bodyStr = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
-                throw IllegalStateException("Drive upload failed (${resp.code}): $bodyStr")
+                throw buildFriendlyDriveHttpError(loc, resp.code, bodyStr)
             }
             val json = JSONObject(bodyStr)
             return DriveFileMeta(

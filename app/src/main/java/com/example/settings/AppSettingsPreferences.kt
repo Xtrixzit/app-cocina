@@ -81,6 +81,7 @@ object AppSettingsPreferences {
     private const val KEY_DRIVE_MD_LINK = "drive_md_link"
     private const val KEY_DRIVE_EMAIL = "drive_linked_email"
     private const val KEY_GUIDED_TUTORIAL_DONE = "guided_tutorial_completed"
+    private const val KEY_GITHUB_REPO = "github_update_repo"
 
     private val _currencyFlow = MutableStateFlow(CurrencyOption.USD)
     private val _marginFlow = MutableStateFlow(30)
@@ -89,6 +90,7 @@ object AppSettingsPreferences {
     private val _timerFlow = MutableStateFlow(PersistedTimerState())
     private val _driveSyncFlow = MutableStateFlow(DriveSyncInfo())
     private val _guidedTutorialCompletedFlow = MutableStateFlow(false)
+    private val _githubRepoFlow = MutableStateFlow("")
 
     @Volatile
     private var initialized = false
@@ -108,6 +110,7 @@ object AppSettingsPreferences {
                     _timerFlow.value = readTimerState(p)
                     _driveSyncFlow.value = readDriveSyncInfo(p)
                     _guidedTutorialCompletedFlow.value = p.getBoolean(KEY_GUIDED_TUTORIAL_DONE, false)
+                    _githubRepoFlow.value = p.getString(KEY_GITHUB_REPO, "") ?: ""
                     initialized = true
                 }
             }
@@ -283,6 +286,23 @@ object AppSettingsPreferences {
         ensureLoaded(context)
         prefs(context).edit().putBoolean(KEY_GUIDED_TUTORIAL_DONE, completed).commit()
         _guidedTutorialCompletedFlow.value = completed
+    }
+
+    fun observeGithubRepo(context: Context): StateFlow<String> {
+        ensureLoaded(context)
+        return _githubRepoFlow.asStateFlow()
+    }
+
+    fun getGithubRepo(context: Context): String {
+        ensureLoaded(context)
+        return _githubRepoFlow.value
+    }
+
+    fun setGithubRepo(context: Context, rawRepo: String) {
+        ensureLoaded(context)
+        val clean = rawRepo.trim()
+        prefs(context).edit().putString(KEY_GITHUB_REPO, clean).apply()
+        _githubRepoFlow.value = clean
     }
 
     fun suggestedSellingPrice(cost: Double, marginPercent: Int): Double {

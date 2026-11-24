@@ -1,5 +1,7 @@
 package com.example
 
+import android.app.Activity
+import android.app.PendingIntent
 import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
@@ -7,14 +9,18 @@ import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -39,16 +45,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -66,15 +77,20 @@ import com.example.auth.SessionPreferences
 import com.example.data.model.DistributionConfig
 import com.example.data.model.Recipe
 import com.example.data.repository.CookingRepository
+import com.example.data.sync.DriveAuthStep
+import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppSettingsPreferences
 import com.example.ui.MainViewModel
 import com.example.ui.UiState
 import com.example.ui.components.CommercialSettingsDialog
+import com.example.ui.components.DrivePermissionPromptDialog
 import com.example.ui.components.GuidedTutorialOverlay
 import com.example.ui.components.LicenseActivationDialog
+import com.example.ui.components.LocalTutorialTargets
 import com.example.ui.components.NotebookBottomBar
 import com.example.ui.components.PrivacyPolicyDialog
 import com.example.ui.components.UpdateAvailableDialog
+import com.example.ui.components.tutorialTarget
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ChefChatDialog
 import com.example.ui.screens.CookingAssistantScreen
@@ -244,7 +260,11 @@ fun AppNavigation(
     }
 
     LaunchedEffect(isGuestMode) {
-        if (auth.currentUser == null && !isGuestMode) {
+        if (
+            auth.currentUser == null &&
+            !isGuestMode &&
+            AppSettingsPreferences.isGuidedTutorialCompleted(context)
+        ) {
             val credentialManager = CredentialManager.create(context)
             AuthManager.attemptAutoSignIn(
                 context = context,
@@ -345,12 +365,17 @@ fun MainFeatureScreen(
     val distributionConfig by viewModel.distributionConfig.collectAsStateWithLifecycle()
     val licenseValidated by viewModel.licenseValidated.collectAsStateWithLifecycle()
     val localGuestCount by viewModel.localGuestCountForMigration.collectAsStateWithLifecycle()
+    val driveSyncInfo by viewModel.driveSyncInfo.collectAsStateWithLifecycle()
+    val driveSyncing by viewModel.driveSyncing.collectAsStateWithLifecycle()
+    val driveSyncError by viewModel.driveSyncError.collectAsStateWithLifecycle()
+    val driveActivationUrl by viewModel.driveActivationUrl.collectAsStateWithLifecycle()
     val recipePhotoGenState by viewModel.recipePhotoGenState.collectAsStateWithLifecycle()
     val chefChatMessages by viewModel.chefChatMessages.collectAsStateWithLifecycle()
     val chefChatRole by viewModel.chefChatRole.collectAsStateWithLifecycle()
     val chefChatSending by viewModel.chefChatSending.collectAsStateWithLifecycle()
     val guidedTutorialCompleted by AppSettingsPreferences.observeGuidedTutorialCompleted(context)
         .collectAsStateWithLifecycle()
+    val tutorialTargets = remember { mutableStateMapOf<String, Rect>() }
 
     val selectedRecipe by viewModel.selectedRecipe.collectAsState()
     val targetServings by viewModel.targetServings.collectAsState()
@@ -382,6 +407,73 @@ fun MainFeatureScreen(
         is UiState.Success -> s.data
         else -> emptyList()
     }
+
+    val forcedUpdateConfig = distributionConfig?.takeIf {
+        it.minRequiredVersionCode > BuildConfig.VERSION_CODE
+    }
+    val isLicenseBlocked = !isGuestMode && distributionConfig?.requireLicense == true && !licenseValidated
+    val isUpdateBlocked = forcedUpdateConfig != null
+    val allDataReady = recipesUiState is UiState.Success &&
+        pantryUiState is UiState.Success &&
+        shoppingUiState is UiState.Success
+
+    var initialDriveAutoLinked by rememberSaveable(currentUserId) { mutableStateOf(false) }
+    var autoDriveConsentAttempted by rememberSaveable(currentUserId) { mutableStateOf(false) }
+    var pendingAutoDriveToken by remember { mutableStateOf<String?>(null) }
+    var pendingDriveConsentIntent by remember { mutableStateOf<PendingIntent?>(null) }
+    var showDrivePermissionNotice by remember { mutableStateOf(false) }
+    var driveNeedsPermissionPrompt by rememberSaveable(currentUserId) { mutableStateOf(false) }
+
+    val autoDriveConsentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { res ->
+        if (res.resultCode == Activity.RESULT_OK && res.data != null) {
+            GoogleDriveSyncRepository.extractTokenFromConsentResult(context, res.data)
+                .onSuccess { token ->
+                    driveNeedsPermissionPrompt = false
+                    pendingDriveConsentIntent = null
+                    showDrivePermissionNotice = false
+                    viewModel.setDriveAutoSyncEnabled(true)
+                    pendingAutoDriveToken = token
+                }
+        }
+    }
+
+    // Immediately attempt Drive linking when signing in with Google; if consent is needed,
+    // clearly inform the user that Drive access permission is needed rather than failing silently.
+    LaunchedEffect(currentUserId, isGuestMode) {
+        if (isGuestMode) return@LaunchedEffect
+        val host = context as? Activity ?: return@LaunchedEffect
+        when (val step = GoogleDriveSyncRepository.requestDriveAuthorization(host)) {
+            is DriveAuthStep.TokenReady -> {
+                driveNeedsPermissionPrompt = false
+                viewModel.setDriveAutoSyncEnabled(true)
+                pendingAutoDriveToken = step.accessToken
+            }
+            is DriveAuthStep.NeedsConsent -> {
+                driveNeedsPermissionPrompt = true
+                if (!autoDriveConsentAttempted) {
+                    autoDriveConsentAttempted = true
+                    pendingDriveConsentIntent = step.pendingIntent
+                    showDrivePermissionNotice = true
+                }
+            }
+            is DriveAuthStep.Failed -> Unit
+        }
+    }
+
+    LaunchedEffect(pendingAutoDriveToken, allDataReady) {
+        val token = pendingAutoDriveToken ?: return@LaunchedEffect
+        if (isGuestMode || !allDataReady || initialDriveAutoLinked) return@LaunchedEffect
+        initialDriveAutoLinked = true
+        pendingAutoDriveToken = null
+        viewModel.syncReadableInventoryToDriveWithToken(
+            accessToken = token,
+            notifyUser = false
+        )
+    }
+
+    CompositionLocalProvider(LocalTutorialTargets provides tutorialTargets) {
 
     if (selectedRecipe != null) {
         RecipeDetailScreen(
@@ -465,49 +557,62 @@ fun MainFeatureScreen(
                                 )
                             }
                         }
-                        IconButton(
-                            onClick = { showChefChatDialog = true },
-                            modifier = Modifier.testTag("action_chef_chat")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.tutorialTarget("topbar_actions")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = stringResource(R.string.cd_chef_chat),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(
-                            onClick = { showSettingsDialog = true },
-                            modifier = Modifier.testTag("action_settings")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = stringResource(R.string.cd_settings),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(
-                            onClick = { showAccountDialog = true },
-                            modifier = Modifier.testTag("action_account")
-                        ) {
-                            Icon(
-                                Icons.Default.AccountCircle,
-                                contentDescription = if (isGuestMode) {
-                                    stringResource(R.string.cd_guest_mode)
-                                } else {
-                                    stringResource(R.string.cd_cloud_account)
-                                },
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                        IconButton(
-                            onClick = { showAboutDialog = true },
-                            modifier = Modifier.testTag("action_about")
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = stringResource(R.string.cd_info),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                            IconButton(
+                                onClick = { showChefChatDialog = true },
+                                modifier = Modifier
+                                    .tutorialTarget("action_chef_chat")
+                                    .testTag("action_chef_chat")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = stringResource(R.string.cd_chef_chat),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(
+                                onClick = { showSettingsDialog = true },
+                                modifier = Modifier
+                                    .tutorialTarget("action_settings")
+                                    .testTag("action_settings")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = stringResource(R.string.cd_settings),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            IconButton(
+                                onClick = { showAccountDialog = true },
+                                modifier = Modifier
+                                    .tutorialTarget("action_account")
+                                    .testTag("action_account")
+                            ) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = if (isGuestMode) {
+                                        stringResource(R.string.cd_guest_mode)
+                                    } else {
+                                        stringResource(R.string.cd_cloud_account)
+                                    },
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                            IconButton(
+                                onClick = { showAboutDialog = true },
+                                modifier = Modifier
+                                    .tutorialTarget("action_about")
+                                    .testTag("action_about")
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = stringResource(R.string.cd_info),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 )
@@ -626,9 +731,33 @@ fun MainFeatureScreen(
         CommercialSettingsDialog(
             isGuestMode = isGuestMode,
             localGuestCountForMigration = localGuestCount,
+            currentUserName = currentUserName,
+            currentUserEmail = currentUserEmail,
+            driveSyncInfo = driveSyncInfo,
+            driveSyncing = driveSyncing,
+            driveSyncError = driveSyncError,
+            driveActivationUrl = driveActivationUrl,
+            driveNeedsPermissionPrompt = driveNeedsPermissionPrompt,
+            distributionConfig = distributionConfig,
             onDismiss = { showSettingsDialog = false },
             onMigrateGuestToCloud = {
                 viewModel.migrateGuestDataToCloud()
+            },
+            onSyncCloudNow = {
+                viewModel.retryCloudSync()
+            },
+            onSwitchOrSignOutAccount = {
+                coroutineScope.launch {
+                    viewModel.prepareSignOut()
+                    if (isGuestMode) {
+                        SessionPreferences.setGuestMode(context, false)
+                    } else {
+                        AuthManager.signOut(credentialManager, {}, this)
+                    }
+                }
+            },
+            onOpenChefChat = {
+                showChefChatDialog = true
             },
             onExportFullBackupJson = { onResult ->
                 viewModel.exportFullBackupJson(onResult)
@@ -642,8 +771,15 @@ fun MainFeatureScreen(
             onExportAiCsv = { onResult ->
                 viewModel.exportAiReadableCsv(onResult)
             },
+            onExportAiHtmlDoc = { onResult ->
+                viewModel.exportAiReadableHtmlDoc(onResult)
+            },
             onSyncDriveWithToken = { token ->
+                viewModel.setDriveAutoSyncEnabled(true)
                 viewModel.syncReadableInventoryToDriveWithToken(token)
+            },
+            onDriveAutoSyncChanged = { enabled ->
+                viewModel.setDriveAutoSyncEnabled(enabled)
             },
             onDriveSyncMessage = { message, isError ->
                 viewModel.reportDriveSyncMessage(message, isError)
@@ -663,6 +799,10 @@ fun MainFeatureScreen(
                     manualUpdateConfig = cfg
                 }
             },
+            onOpenAvailableUpdate = { cfg ->
+                showSettingsDialog = false
+                manualUpdateConfig = cfg
+            },
             onShowPrivacyPolicy = { showPrivacyDialog = true },
             onDeleteAccount = {
                 showSettingsDialog = false
@@ -681,10 +821,6 @@ fun MainFeatureScreen(
 
     if (showPrivacyDialog) {
         PrivacyPolicyDialog(onDismiss = { showPrivacyDialog = false })
-    }
-
-    val forcedUpdateConfig = distributionConfig?.takeIf {
-        it.minRequiredVersionCode > BuildConfig.VERSION_CODE
     }
     if (forcedUpdateConfig != null) {
         UpdateAvailableDialog(
@@ -813,7 +949,7 @@ fun MainFeatureScreen(
             onDismissRequest = { showAboutDialog = false },
             title = {
                 Text(
-                    stringResource(R.string.about_title, BuildConfig.VERSION_NAME),
+                    stringResource(R.string.about_title),
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -835,18 +971,36 @@ fun MainFeatureScreen(
                 TextButton(
                     onClick = {
                         showAboutDialog = false
-                        showPrivacyDialog = true
+                        showSettingsDialog = true
                     }
                 ) {
-                    Text(stringResource(R.string.privacy_title))
+                    Text(stringResource(R.string.cd_settings))
                 }
             }
         )
     }
 
-    val isLicenseBlocked = !isGuestMode && distributionConfig?.requireLicense == true && !licenseValidated
-    val isUpdateBlocked = forcedUpdateConfig != null
-    if (!guidedTutorialCompleted && !isLicenseBlocked && !isUpdateBlocked) {
+    if (showDrivePermissionNotice && pendingDriveConsentIntent != null && !isLicenseBlocked && !isUpdateBlocked) {
+        DrivePermissionPromptDialog(
+            onGrantPermission = {
+                val pi = pendingDriveConsentIntent
+                showDrivePermissionNotice = false
+                if (pi != null) {
+                    try {
+                        autoDriveConsentLauncher.launch(
+                            IntentSenderRequest.Builder(pi.intentSender).build()
+                        )
+                    } catch (_: Exception) {
+                    }
+                }
+            },
+            onDismissLater = {
+                showDrivePermissionNotice = false
+            }
+        )
+    }
+
+    if (!guidedTutorialCompleted && !isLicenseBlocked && !isUpdateBlocked && !showDrivePermissionNotice) {
         GuidedTutorialOverlay(
             onSwitchTab = { tab ->
                 if (selectedRecipe != null) {
@@ -857,7 +1011,11 @@ fun MainFeatureScreen(
             onCompleted = {
                 AppSettingsPreferences.setGuidedTutorialCompleted(context, true)
                 selectedTab = 0
-            }
+            },
+            isGuestMode = isGuestMode,
+            currentUserEmail = currentUserEmail,
+            tutorialTargets = tutorialTargets
         )
+    }
     }
 }

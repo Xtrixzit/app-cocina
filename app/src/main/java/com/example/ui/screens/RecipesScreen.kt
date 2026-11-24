@@ -60,6 +60,7 @@ import com.example.ui.components.PostItFilterChip
 import com.example.ui.components.RecipeCard
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
+import com.example.ui.components.tutorialTarget
 import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
@@ -99,7 +100,9 @@ fun RecipesScreen(
                 onClick = onAddNewRecipe,
                 backgroundColor = PostItPeach,
                 rotationDegrees = -2f,
-                modifier = Modifier.testTag("add_recipe_fab")
+                modifier = Modifier
+                    .tutorialTarget("add_recipe_fab")
+                    .testTag("add_recipe_fab")
             )
         }
     ) { padding ->

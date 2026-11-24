@@ -155,6 +155,7 @@ fun NotebookBottomBar(
                             cornerRadiusDp = 10f
                         )
                         .stampClickable(onClick = { onTabSelected(index) })
+                        .tutorialTarget(tab.testTag)
                         .testTag(tab.testTag)
                         .padding(horizontal = 4.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center

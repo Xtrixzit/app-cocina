@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -61,6 +62,12 @@ import com.example.settings.DriveSyncInfo
 import com.example.ui.components.GuidedTutorialOverlay
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
+import com.example.data.model.DistributionConfig
+import com.example.data.sync.DriveApiDisabledException
+import com.example.data.sync.GitHubUpdateChecker
+import com.example.data.sync.GoogleDriveSyncRepository
+import com.example.ui.components.CommercialSettingsDialog
+import com.example.ui.components.DrivePermissionPromptDialog
 import com.example.ui.screens.ChefChatDialog
 import com.example.ui.screens.PantryFormDialog
 import com.example.ui.screens.ProductionScreen
@@ -552,11 +559,14 @@ class ExampleRobolectricTest {
 
     @Test
     fun `commercial distribution and license models align with firestore schema`() {
-        val dist = com.example.data.model.DistributionConfig(
+        assertFalse(BuildConfig.VERSION_NAME.startsWith("3"))
+        assertTrue(BuildConfig.VERSION_CODE >= 13)
+
+        val dist = DistributionConfig(
             latestVersionCode = 14,
-            latestVersionName = "3.1",
+            latestVersionName = "1.1",
             minRequiredVersionCode = 13,
-            updateUrl = "https://example.com/Recetario-v3.1.apk",
+            updateUrl = "https://example.com/Recetario-v1.1.apk",
             updateNotes = "Mejoras",
             requireLicense = true,
             supportContact = "soporte@example.com"
@@ -895,23 +905,12 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `cookingAssistantScreen exposes Google Drive AI sync card and format actions`() {
+    fun `cookingAssistantScreen focuses on voice commands and timers without Drive card`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         if (FirebaseApp.getApps(context).isEmpty()) {
             FirebaseApp.initializeApp(context)
         }
         SessionPreferences.setGuestMode(context, true)
-        AppSettingsPreferences.saveDriveSyncInfo(
-            context,
-            DriveSyncInfo(
-                autoSyncEnabled = true,
-                lastSyncMillis = 1_750_000_000_000L,
-                docFileId = "doc_1",
-                docWebLink = "https://docs.google.com/document/d/doc_1",
-                sheetFileId = "sheet_1",
-                sheetWebLink = "https://docs.google.com/spreadsheets/d/sheet_1"
-            )
-        )
 
         val viewModel = MainViewModel(
             repository = CookingRepository(context),
@@ -932,18 +931,9 @@ class ExampleRobolectricTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("cooking_assistant_list")
-            .performScrollToNode(hasTestTag("drive_ai_sync_card"))
-        composeRule.onNodeWithTag("drive_ai_sync_card").assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_sync_now_button").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_auto_sync_switch").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_open_doc_button").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_copy_link_button").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_share_ai_text_button").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_export_md_button").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("drive_export_csv_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("voice_provider_info_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_ai_sync_card").assertDoesNotExist()
 
-        AppSettingsPreferences.clearDriveSyncInfo(context)
         SessionPreferences.setGuestMode(context, false)
     }
 
@@ -961,7 +951,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `guidedTutorialOverlay forces sequential confirmation across all 8 steps and switches tabs`() {
+    fun `guidedTutorialOverlay requires interactive sample practice on every step and explains user scopes`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         AppSettingsPreferences.setLanguageCode(context, "es")
         val switchedTabs = mutableListOf<Int>()
@@ -971,24 +961,73 @@ class ExampleRobolectricTest {
             MyApplicationTheme {
                 GuidedTutorialOverlay(
                     onSwitchTab = { switchedTabs.add(it) },
-                    onCompleted = { completed = true }
+                    onCompleted = { completed = true },
+                    isGuestMode = false,
+                    currentUserEmail = "chef@example.com",
+                    tutorialTargets = mapOf(
+                        "topbar_actions" to androidx.compose.ui.geometry.Rect(180f, 10f, 310f, 52f),
+                        "add_recipe_fab" to androidx.compose.ui.geometry.Rect(160f, 360f, 300f, 415f),
+                        "tab_recipes" to androidx.compose.ui.geometry.Rect(6f, 410f, 64f, 466f)
+                    )
                 )
             }
         }
 
         composeRule.onNodeWithTag("guided_tutorial_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("tutorial_spotlight_canvas").assertIsDisplayed()
+        composeRule.onNodeWithTag("tutorial_user_scope_banner").assertIsDisplayed()
+        composeRule.onNodeWithText("chef@example.com", substring = true).assertIsDisplayed()
 
-        // Step 1..7 -> must check confirmation box before next unlocks
-        for (step in 1..7) {
-            composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
-            composeRule.onNodeWithTag("tutorial_confirm_step_checkbox").performClick()
-            composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
-            assertFalse(completed)
-        }
+        // Step 1: Select preview profile in sandbox
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s1_google_chip").performScrollTo().performClick()
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
 
-        // Step 8 -> confirm unlocks Finish button
+        // Step 2: Enter sample recipe name
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s2_recipe_input").performScrollTo().performTextInput("Tacos de Prueba")
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
+
+        // Step 3: Scale sample servings with +
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s3_plus").performScrollTo().performClick()
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
+
+        // Step 4: Enter sample kg & price and verify unit conversion output
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s4_qty_input").performScrollTo().performTextInput("1.5")
+        composeRule.onNodeWithTag("tutorial_s4_price_input").performScrollTo().performTextInput("6.00")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("1500 g", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
+
+        // Step 5: Mark shopping sample item bought -> Pantry
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s5_mark_button").performScrollTo().performClick()
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
+
+        // Step 6: Adjust production margin % and verify suggested sale output
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s6_margin_input").performScrollTo().performTextReplacement("40")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("$14.00", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
+
+        // Step 7: Tap sample voice question
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsNotEnabled()
+        composeRule.onNodeWithTag("tutorial_s7_q1_chip").performScrollTo().performClick()
+        composeRule.onNodeWithTag("tutorial_next_button").assertIsEnabled().performClick()
+        assertFalse(completed)
+
+        // Step 8: Test quick timer chip -> unlocks Finish
         composeRule.onNodeWithTag("tutorial_finish_button").assertIsNotEnabled()
-        composeRule.onNodeWithTag("tutorial_confirm_step_checkbox").performClick()
+        composeRule.onNodeWithTag("tutorial_s8_timer_5m").performScrollTo().performClick()
         composeRule.onNodeWithTag("tutorial_finish_button").assertIsEnabled().performClick()
 
         assertTrue(completed)
@@ -1209,13 +1248,223 @@ class ExampleRobolectricTest {
             }
         }
 
-        // Default: 1x -> 250 g Harina * $0.004/g = $1.00, 4 portions -> $0.25/portion, +30% = $1.30 ($0.33/portion approx)
+        // Default: 1x -> 250 g Harina * $0.004/g = $1.00, 4 portions -> $0.25/portion, +30% = $1.30 ($4.00/kg cost, $5.20/kg sale)
+        composeRule.onNodeWithTag("production_lazy_list")
+            .performScrollToNode(hasText("0.25 kg", substring = true))
+        composeRule.onNodeWithText("0.25 kg", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("$4.00/kg", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("production_lazy_list")
+            .performScrollToNode(hasText("250 g"))
         composeRule.onNodeWithText("250 g").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("production_lazy_list")
+            .performScrollToNode(hasTestTag("production_servings_input"))
         composeRule.onNodeWithTag("production_servings_input").performTextReplacement("8")
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("production_lazy_list")
+            .performScrollToNode(hasText("500 g"))
         composeRule.onNodeWithText("500 g").assertIsDisplayed()
 
         AppSettingsPreferences.setLanguageCode(context, "")
         SessionPreferences.setGuestMode(context, false)
+    }
+
+    @Test
+    fun `appNavigation displays guest and google selection before guided tutorial`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        val auth = FirebaseAuth.getInstance()
+        auth.signOut()
+        SessionPreferences.setGuestMode(context, false)
+        AppSettingsPreferences.setGuidedTutorialCompleted(context, false)
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                AppNavigation(auth = auth)
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("google_signin_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("guest_signin_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("guided_tutorial_overlay").assertDoesNotExist()
+
+        composeRule.onNodeWithTag("guest_signin_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("guided_tutorial_overlay").assertIsDisplayed()
+
+        SessionPreferences.setGuestMode(context, false)
+        AppSettingsPreferences.setGuidedTutorialCompleted(context, false)
+    }
+
+    @Test
+    fun `commercialSettingsDialog exposes notebook theme Drive AI controls features extras privacy and in-app updates without version 3 label`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+
+        var privacyOpened = false
+        var updateOpened = false
+        var checkUpdatesCalled = false
+        var toggledAutoSyncTo: Boolean? = null
+        val updateCfg = DistributionConfig(
+            latestVersionCode = BuildConfig.VERSION_CODE + 1,
+            latestVersionName = "1.1",
+            minRequiredVersionCode = BuildConfig.VERSION_CODE,
+            updateUrl = "https://example.com/Recetario.apk",
+            updateNotes = "Nuevas mejoras de cocina"
+        )
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                CommercialSettingsDialog(
+                    isGuestMode = false,
+                    localGuestCountForMigration = 0,
+                    currentUserName = "Chef Ana",
+                    currentUserEmail = "ana@example.com",
+                    driveSyncInfo = DriveSyncInfo(
+                        autoSyncEnabled = true,
+                        lastSyncMillis = 1_750_000_000_000L,
+                        docFileId = "doc_1",
+                        docWebLink = "https://docs.google.com/document/d/doc_1",
+                        sheetFileId = "sheet_1",
+                        sheetWebLink = "https://docs.google.com/spreadsheets/d/sheet_1",
+                        linkedEmail = "ana@example.com"
+                    ),
+                    driveSyncError = "La API de Google Drive aún está deshabilitada",
+                    driveActivationUrl = "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1034453362537",
+                    distributionConfig = updateCfg,
+                    onDismiss = {},
+                    onMigrateGuestToCloud = {},
+                    onExportFullBackupJson = {},
+                    onImportFullBackupJson = { _, _ -> },
+                    onDriveAutoSyncChanged = { toggledAutoSyncTo = it },
+                    onActivateLicense = {},
+                    onCheckUpdates = { checkUpdatesCalled = true },
+                    onOpenAvailableUpdate = { updateOpened = true },
+                    onShowPrivacyPolicy = { privacyOpened = true },
+                    onDeleteAccount = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("settings_profile_card").assertIsDisplayed()
+        composeRule.onNodeWithText("Chef Ana").assertIsDisplayed()
+        composeRule.onNodeWithText("ana@example.com").assertIsDisplayed()
+        composeRule.onNodeWithText("v3", substring = true).assertDoesNotExist()
+
+        // Drive card and actions live inside Settings now
+        composeRule.onNodeWithTag("drive_ai_sync_card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_enable_api_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_sync_now_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_auto_sync_switch").performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(false, toggledAutoSyncTo)
+        composeRule.onNodeWithTag("drive_open_doc_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_copy_link_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_open_sheet_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_free_save_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_free_save_doc_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_free_share_file_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_share_ai_text_button").performScrollTo().assertIsDisplayed()
+
+        composeRule.onNodeWithTag("settings_features_card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_open_chef_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_export_md_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_export_csv_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_github_repo_input").performScrollTo().performTextInput("miusuario/recetario")
+        composeRule.waitForIdle()
+        assertEquals("miusuario/recetario", AppSettingsPreferences.getGithubRepo(context))
+        composeRule.onNodeWithTag("settings_install_update_button").performScrollTo().assertIsDisplayed().performClick()
+        assertTrue(updateOpened)
+
+        composeRule.onNodeWithTag("settings_check_updates_button").performScrollTo().performClick()
+        assertTrue(checkUpdatesCalled)
+
+        composeRule.onNodeWithTag("settings_privacy_policy_button").performScrollTo().performClick()
+        assertTrue(privacyOpened)
+
+        AppSettingsPreferences.setGithubRepo(context, "")
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `driveApiDisabledErrorParsesCleanlyAndGitHubUpdateCheckerDetectsNewReleases`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        val loc = LocaleHelper.localizedContext(context)
+
+        val rawGoogle403 = """
+            {
+              "error": {
+                "code": 403,
+                "message": "Google Drive API has not been used in project 1034453362537 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1034453362537 then retry.",
+                "status": "PERMISSION_DENIED",
+                "details": [{ "reason": "SERVICE_DISABLED" }]
+              }
+            }
+        """.trimIndent()
+        val parsedDriveErr = GoogleDriveSyncRepository.buildFriendlyDriveHttpError(loc, 403, rawGoogle403)
+        assertTrue(parsedDriveErr is DriveApiDisabledException)
+        val disabledEx = parsedDriveErr as DriveApiDisabledException
+        assertEquals(
+            "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1034453362537",
+            disabledEx.activationUrl
+        )
+        assertFalse(disabledEx.message!!.contains("SERVICE_DISABLED"))
+        assertTrue(disabledEx.message!!.contains("1034453362537"))
+
+        assertEquals("miusuario/recetario", GitHubUpdateChecker.normalizeRepoSlug("https://github.com/miusuario/recetario.git"))
+        assertTrue(GitHubUpdateChecker.isRemoteVersionNewer("v1.1", "", "", 13, "1.0"))
+        assertFalse(GitHubUpdateChecker.isRemoteVersionNewer("v1.0", "", "", 13, "1.0"))
+
+        val releaseJson = """
+            {
+              "tag_name": "v1.2",
+              "name": "Recetario 1.2",
+              "body": "Mejoras en recetas y sincronizacion",
+              "html_url": "https://github.com/miusuario/recetario/releases/tag/v1.2",
+              "assets": [
+                {
+                  "name": "Recetario-v1.2.apk",
+                  "browser_download_url": "https://github.com/miusuario/recetario/releases/download/v1.2/Recetario-v1.2.apk"
+                }
+              ]
+            }
+        """.trimIndent()
+        val ghConfig = GitHubUpdateChecker.parseReleaseJson(releaseJson, 13, "1.0")
+        assertNotNull(ghConfig)
+        assertEquals("v1.2", ghConfig!!.latestVersionName)
+        assertTrue(ghConfig.latestVersionCode > 13)
+        assertEquals(
+            "https://github.com/miusuario/recetario/releases/download/v1.2/Recetario-v1.2.apk",
+            ghConfig.updateUrl
+        )
+
+        var grantClicked = false
+        composeRule.setContent {
+            MyApplicationTheme {
+                DrivePermissionPromptDialog(
+                    onGrantPermission = { grantClicked = true },
+                    onDismissLater = {}
+                )
+            }
+        }
+        composeRule.onNodeWithTag("drive_permission_prompt_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("drive_permission_grant_button").performClick()
+        assertTrue(grantClicked)
+
+        val sharedUri = AiReadableExportFormatter.writeShareableExportFile(
+            context = context,
+            fileName = "recetario_test.md",
+            content = "# Hola Recetario\n- Harina: 1 kg"
+        )
+        assertEquals("content", sharedUri.scheme)
+        assertEquals("${context.packageName}.fileprovider", sharedUri.authority)
+        val cachedFile = java.io.File(java.io.File(context.cacheDir, "ai_exports"), "recetario_test.md")
+        assertTrue(cachedFile.exists())
+        assertTrue(cachedFile.readText().contains("# Hola Recetario"))
+
+        AppSettingsPreferences.setLanguageCode(context, "")
     }
 }

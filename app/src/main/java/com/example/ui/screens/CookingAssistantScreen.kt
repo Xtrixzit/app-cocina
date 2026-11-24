@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -13,8 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,38 +27,28 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AlarmOn
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -78,16 +65,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
@@ -96,18 +80,14 @@ import com.example.ai.VoiceCommandRouter
 import com.example.ai.VoiceSpeechPlayer
 import com.example.data.model.PantryItem
 import com.example.data.model.Recipe
-import com.example.data.sync.DriveAuthStep
-import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppSettingsPreferences
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import com.example.ui.MainViewModel
 import com.example.ui.RecipeFeasibility
 import com.example.ui.components.CookingTimerDialog
 import com.example.ui.components.PostItButton
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
+import com.example.ui.components.tutorialTarget
 import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
@@ -119,11 +99,9 @@ import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
 import com.example.util.ImageUtils
-import com.example.util.LocaleHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CookingAssistantScreen(
     viewModel: MainViewModel,
@@ -134,96 +112,9 @@ fun CookingAssistantScreen(
     onConsumeVoiceLaunch: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val activity = context as? Activity
-    val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
     var activeTimerMinutes by remember { mutableStateOf<Int?>(null) }
     var resumePersistedTimer by remember { mutableStateOf(false) }
-
-    val driveSyncing by viewModel.driveSyncing.collectAsStateWithLifecycle()
-    val driveSyncError by viewModel.driveSyncError.collectAsStateWithLifecycle()
-    val driveSyncInfo by viewModel.driveSyncInfo.collectAsStateWithLifecycle()
-
-    var pendingExportText by remember { mutableStateOf<String?>(null) }
-
-    val exportMdLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/markdown")
-    ) { uri ->
-        val txt = pendingExportText
-        pendingExportText = null
-        if (uri != null && !txt.isNullOrBlank()) {
-            try {
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(txt.toByteArray(Charsets.UTF_8))
-                }
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    val exportCsvLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/csv")
-    ) { uri ->
-        val txt = pendingExportText
-        pendingExportText = null
-        if (uri != null && !txt.isNullOrBlank()) {
-            try {
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(txt.toByteArray(Charsets.UTF_8))
-                }
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    val driveConsentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { res ->
-        if (res.resultCode == Activity.RESULT_OK && res.data != null) {
-            GoogleDriveSyncRepository.extractTokenFromConsentResult(context, res.data)
-                .onSuccess { token ->
-                    viewModel.syncReadableInventoryToDriveWithToken(token)
-                }
-                .onFailure { err ->
-                    viewModel.reportDriveSyncMessage(
-                        context.getString(R.string.drive_ai_sync_error, err.localizedMessage ?: ""),
-                        isError = true
-                    )
-                }
-        } else {
-            viewModel.reportDriveSyncMessage(context.getString(R.string.drive_ai_sync_cancelled))
-        }
-    }
-
-    fun startDriveSyncFlow() {
-        if (driveSyncing) return
-        val hostActivity = activity ?: return
-        coroutineScope.launch {
-            when (val step = GoogleDriveSyncRepository.requestDriveAuthorization(hostActivity)) {
-                is DriveAuthStep.TokenReady -> {
-                    viewModel.syncReadableInventoryToDriveWithToken(step.accessToken)
-                }
-                is DriveAuthStep.NeedsConsent -> {
-                    try {
-                        driveConsentLauncher.launch(
-                            IntentSenderRequest.Builder(step.pendingIntent.intentSender).build()
-                        )
-                    } catch (e: Exception) {
-                        viewModel.reportDriveSyncMessage(
-                            context.getString(R.string.drive_ai_sync_error, e.localizedMessage ?: ""),
-                            isError = true
-                        )
-                    }
-                }
-                is DriveAuthStep.Failed -> {
-                    viewModel.reportDriveSyncMessage(
-                        context.getString(R.string.drive_ai_sync_error, step.message),
-                        isError = true
-                    )
-                }
-            }
-        }
-    }
 
     val speechPlayer = remember { VoiceSpeechPlayer(context) }
     DisposableEffect(Unit) {
@@ -485,6 +376,7 @@ fun CookingAssistantScreen(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .tutorialTarget("voice_ask_mic_button")
                             .testTag("voice_ask_mic_button")
                     ) {
                         Icon(
@@ -683,243 +575,6 @@ fun CookingAssistantScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-                }
-            }
-        }
-
-        // Google Drive AI-Readable Sync Card (Docs, Sheets & Markdown instead of .json)
-        item {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = PostItMint.copy(alpha = 0.38f)
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .sketchedBorder(color = StockGreen.copy(alpha = 0.7f), strokeWidthDp = 1.6f)
-                    .testTag("drive_ai_sync_card")
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (driveSyncInfo.lastSyncMillis > 0L) {
-                                Icons.Default.CloudDone
-                            } else {
-                                Icons.Default.CloudSync
-                            },
-                            contentDescription = stringResource(R.string.drive_ai_card_title),
-                            tint = StockGreen,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.drive_ai_card_title),
-                            fontFamily = CaveatFontFamily,
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-
-                    Text(
-                        text = stringResource(R.string.drive_ai_card_desc),
-                        fontFamily = PatrickHandFontFamily,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    val statusText = if (driveSyncInfo.lastSyncMillis > 0L) {
-                        val stamp = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                            .format(Date(driveSyncInfo.lastSyncMillis))
-                        stringResource(R.string.drive_ai_status_synced, stamp)
-                    } else {
-                        stringResource(R.string.drive_ai_status_never)
-                    }
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (driveSyncInfo.lastSyncMillis > 0L) StockGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-
-                    if (!driveSyncError.isNullOrBlank()) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = driveSyncError!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = { startDriveSyncFlow() },
-                        enabled = !driveSyncing,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = StockGreen,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("drive_sync_now_button")
-                    ) {
-                        if (driveSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.drive_ai_syncing), fontWeight = FontWeight.Bold)
-                        } else {
-                            Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.drive_ai_sync_now), fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                            Text(
-                                text = stringResource(R.string.drive_ai_auto_sync),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = stringResource(R.string.drive_ai_auto_sync_sub),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = driveSyncInfo.autoSyncEnabled,
-                            onCheckedChange = { viewModel.setDriveAutoSyncEnabled(it) },
-                            modifier = Modifier.testTag("drive_auto_sync_switch")
-                        )
-                    }
-
-                    if (driveSyncInfo.docWebLink.isNotBlank() || driveSyncInfo.sheetWebLink.isNotBlank()) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            if (driveSyncInfo.docWebLink.isNotBlank()) {
-                                OutlinedButton(
-                                    onClick = {
-                                        try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, driveSyncInfo.docWebLink.toUri()))
-                                        } catch (_: Exception) {
-                                        }
-                                    },
-                                    modifier = Modifier.testTag("drive_open_doc_button")
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(stringResource(R.string.drive_ai_open_doc), style = MaterialTheme.typography.labelMedium)
-                                }
-
-                                OutlinedButton(
-                                    onClick = {
-                                        clipboardManager.setText(AnnotatedString(driveSyncInfo.docWebLink))
-                                        viewModel.reportDriveSyncMessage(context.getString(R.string.drive_ai_link_copied))
-                                    },
-                                    modifier = Modifier.testTag("drive_copy_link_button")
-                                ) {
-                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(stringResource(R.string.drive_ai_copy_link), style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-                            if (driveSyncInfo.sheetWebLink.isNotBlank()) {
-                                OutlinedButton(
-                                    onClick = {
-                                        try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, driveSyncInfo.sheetWebLink.toUri()))
-                                        } catch (_: Exception) {
-                                        }
-                                    },
-                                    modifier = Modifier.testTag("drive_open_sheet_button")
-                                ) {
-                                    Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(stringResource(R.string.drive_ai_open_sheet), style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-                        }
-                    }
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.exportAiReadableMarkdown { md ->
-                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.drive_ai_doc_name))
-                                        putExtra(Intent.EXTRA_TEXT, md)
-                                    }
-                                    context.startActivity(Intent.createChooser(sendIntent, null))
-                                }
-                            },
-                            modifier = Modifier.testTag("drive_share_ai_text_button")
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.drive_ai_share_text), style = MaterialTheme.typography.labelMedium)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.exportAiReadableMarkdown { md ->
-                                    pendingExportText = md
-                                    val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-                                    exportMdLauncher.launch("recetario_ia_$stamp.md")
-                                }
-                            },
-                            modifier = Modifier.testTag("drive_export_md_button")
-                        ) {
-                            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.drive_ai_export_md), style = MaterialTheme.typography.labelMedium)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.exportAiReadableCsv { csv ->
-                                    pendingExportText = csv
-                                    val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-                                    exportCsvLauncher.launch("recetario_inventario_$stamp.csv")
-                                }
-                            },
-                            modifier = Modifier.testTag("drive_export_csv_button")
-                        ) {
-                            Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.drive_ai_export_csv), style = MaterialTheme.typography.labelMedium)
-                        }
                     }
                 }
             }

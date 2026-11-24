@@ -1,6 +1,8 @@
 package com.example.data.sync
 
 import android.content.Context
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.example.R
 import com.example.data.model.PantryItem
 import com.example.data.model.ProductionLog
@@ -10,6 +12,7 @@ import com.example.settings.AppSettingsPreferences
 import com.example.settings.CurrencyOption
 import com.example.util.LocaleHelper
 import com.example.util.LocalizedLabels
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -380,5 +383,21 @@ object AiReadableExportFormatter {
         }
 
         return sb.toString()
+    }
+
+    fun writeShareableExportFile(
+        context: Context,
+        fileName: String,
+        content: String
+    ): Uri {
+        val dir = File(context.cacheDir, "ai_exports").apply { mkdirs() }
+        val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val outFile = File(dir, safeName)
+        outFile.writeText(content, Charsets.UTF_8)
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            outFile
+        )
     }
 }

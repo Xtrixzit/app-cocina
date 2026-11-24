@@ -18,8 +18,11 @@ import com.example.data.model.Recipe
 import com.example.data.model.RecipeIngredient
 import com.example.data.model.ShoppingItem
 import com.example.data.repository.CookingRepository
+import com.example.BuildConfig
 import com.example.data.sync.AiReadableExportFormatter
+import com.example.data.sync.DriveApiDisabledException
 import com.example.data.sync.FullBackupManager
+import com.example.data.sync.GitHubUpdateChecker
 import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppSettingsPreferences
 import com.example.settings.DriveSyncInfo
@@ -98,6 +101,9 @@ class MainViewModel(
 
     private val _driveSyncError = MutableStateFlow<String?>(null)
     val driveSyncError: StateFlow<String?> = _driveSyncError.asStateFlow()
+
+    private val _driveActivationUrl = MutableStateFlow<String?>(null)
+    val driveActivationUrl: StateFlow<String?> = _driveActivationUrl.asStateFlow()
 
     val driveSyncInfo: StateFlow<DriveSyncInfo> =
         AppSettingsPreferences.observeDriveSyncInfo(repository.context)
@@ -242,6 +248,20 @@ class MainViewModel(
             }
 
             if (!isGuestMode) {
+                val existingDrive = AppSettingsPreferences.getDriveSyncInfo(repository.context)
+                if (
+                    existingDrive.linkedEmail.isNotBlank() &&
+                    currentUserEmail.isNotBlank() &&
+                    !existingDrive.linkedEmail.equals(currentUserEmail, ignoreCase = true)
+                ) {
+                    AppSettingsPreferences.saveDriveSyncInfo(
+                        repository.context,
+                        DriveSyncInfo(autoSyncEnabled = true, linkedEmail = currentUserEmail)
+                    )
+                } else if (!existingDrive.autoSyncEnabled && existingDrive.lastSyncMillis == 0L) {
+                    AppSettingsPreferences.setDriveAutoSyncEnabled(repository.context, true)
+                }
+
                 _localGuestCountForMigration.value = repository.getLocalGuestRecordCount()
                 val cfg = repository.fetchDistributionConfig()
                 _distributionConfig.value = cfg
@@ -252,6 +272,25 @@ class MainViewModel(
                     } else {
                         val claimRes = repository.verifyOrClaimLicense(currentUserId, savedKey)
                         _licenseValidated.value = claimRes.isSuccess
+                    }
+                }
+            }
+
+            // Silently check configured GitHub Releases in background for instant version awareness
+            val configuredRepo = resolveEffectiveGithubRepo()
+            if (configuredRepo.isNotBlank()) {
+                val ghConfig = GitHubUpdateChecker.fetchLatestRelease(
+                    repoInput = configuredRepo,
+                    currentVersionCode = BuildConfig.VERSION_CODE,
+                    currentVersionName = BuildConfig.VERSION_NAME
+                ).getOrNull()
+                if (ghConfig != null) {
+                    val current = _distributionConfig.value
+                    if (current == null || ghConfig.latestVersionCode >= current.latestVersionCode) {
+                        _distributionConfig.value = ghConfig.copy(
+                            minRequiredVersionCode = current?.minRequiredVersionCode ?: 0,
+                            requireLicense = current?.requireLicense ?: false
+                        )
                     }
                 }
             }
@@ -792,9 +831,30 @@ class MainViewModel(
         }
     }
 
+    fun exportAiReadableHtmlDoc(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            repository.exportFullBackup(currentUserId, isGuestMode)
+                .onSuccess { payload ->
+                    val html = AiReadableExportFormatter.exportToGoogleDocHtml(
+                        context = repository.context,
+                        recipes = payload.recipes,
+                        pantry = payload.pantry,
+                        shopping = payload.shopping,
+                        productionLogs = payload.productionLogs,
+                        currencyCode = payload.currencyCode ?: AppSettingsPreferences.getCurrency(repository.context).code,
+                        marginPercent = payload.marginPercent ?: AppSettingsPreferences.getMarginPercent(repository.context)
+                    )
+                    onResult(html)
+                }
+                .onFailure { e ->
+                    _userMessage.emit(str(R.string.vm_err_import, e.localizedMessage ?: ""))
+                }
+        }
+    }
+
     fun setDriveAutoSyncEnabled(enabled: Boolean) {
         AppSettingsPreferences.setDriveAutoSyncEnabled(repository.context, enabled)
-        if (enabled && driveSyncInfo.value.lastSyncMillis > 0L) {
+        if (enabled && (!isGuestMode || driveSyncInfo.value.lastSyncMillis > 0L)) {
             scheduleAutoDriveSync()
         }
     }
@@ -802,6 +862,8 @@ class MainViewModel(
     fun reportDriveSyncMessage(message: String, isError: Boolean = false) {
         if (isError) {
             _driveSyncError.value = message
+        } else {
+            _driveActivationUrl.value = null
         }
         viewModelScope.launch {
             _userMessage.emit(message)
@@ -816,6 +878,7 @@ class MainViewModel(
         viewModelScope.launch {
             _driveSyncing.value = true
             _driveSyncError.value = null
+            _driveActivationUrl.value = null
             try {
                 val payload = repository.exportFullBackup(currentUserId, isGuestMode).getOrThrow()
                 val res = GoogleDriveSyncRepository.syncReadableFilesToDrive(
@@ -830,14 +893,24 @@ class MainViewModel(
                     linkedEmail = currentUserEmail
                 )
                 res.onSuccess {
+                    _driveActivationUrl.value = null
                     if (notifyUser) {
                         _userMessage.emit(str(R.string.drive_ai_sync_success))
                     }
                 }.onFailure { err ->
-                    val msg = str(R.string.drive_ai_sync_error, err.localizedMessage ?: "")
-                    _driveSyncError.value = msg
-                    if (notifyUser) {
-                        _userMessage.emit(msg)
+                    if (err is DriveApiDisabledException) {
+                        val friendly = err.message ?: str(R.string.drive_api_disabled_friendly, "1034453362537")
+                        _driveActivationUrl.value = err.activationUrl
+                        _driveSyncError.value = friendly
+                        if (notifyUser) {
+                            _userMessage.emit(friendly)
+                        }
+                    } else {
+                        val msg = str(R.string.drive_ai_sync_error, err.localizedMessage ?: "")
+                        _driveSyncError.value = msg
+                        if (notifyUser) {
+                            _userMessage.emit(msg)
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -856,7 +929,8 @@ class MainViewModel(
 
     private fun scheduleAutoDriveSync() {
         val info = AppSettingsPreferences.getDriveSyncInfo(repository.context)
-        if (!info.autoSyncEnabled || info.lastSyncMillis <= 0L) return
+        if (!info.autoSyncEnabled) return
+        if (isGuestMode && info.lastSyncMillis <= 0L) return
 
         autoDriveSyncJob?.cancel()
         autoDriveSyncJob = viewModelScope.launch {
@@ -911,16 +985,42 @@ class MainViewModel(
         }
     }
 
+    private fun resolveEffectiveGithubRepo(): String {
+        val localRepo = AppSettingsPreferences.getGithubRepo(repository.context)
+        if (localRepo.isNotBlank()) return GitHubUpdateChecker.normalizeRepoSlug(localRepo)
+        val remoteRepo = _distributionConfig.value?.githubRepo.orEmpty()
+        return GitHubUpdateChecker.normalizeRepoSlug(remoteRepo)
+    }
+
     fun checkUpdatesManual(currentVersionCode: Int, currentVersionName: String, onUpdateFound: (DistributionConfig) -> Unit) {
         viewModelScope.launch {
-            if (isGuestMode) {
-                _userMessage.emit(str(R.string.cloud_feature_requires_google))
-                return@launch
+            val firestoreCfg = if (!isGuestMode) repository.fetchDistributionConfig() else null
+            if (firestoreCfg != null) {
+                _distributionConfig.value = firestoreCfg
             }
-            val cfg = repository.fetchDistributionConfig()
-            _distributionConfig.value = cfg
-            if (cfg != null && cfg.latestVersionCode > currentVersionCode) {
-                onUpdateFound(cfg)
+            val repoSlug = AppSettingsPreferences.getGithubRepo(repository.context)
+                .ifBlank { firestoreCfg?.githubRepo.orEmpty() }
+                .let { GitHubUpdateChecker.normalizeRepoSlug(it) }
+
+            val githubCfg = if (repoSlug.isNotBlank()) {
+                GitHubUpdateChecker.fetchLatestRelease(
+                    repoInput = repoSlug,
+                    currentVersionCode = currentVersionCode,
+                    currentVersionName = currentVersionName
+                ).getOrNull()
+            } else null
+
+            val merged = listOfNotNull(firestoreCfg, githubCfg)
+                .maxByOrNull { it.latestVersionCode }
+
+            if (merged != null) {
+                _distributionConfig.value = merged
+            }
+
+            if (merged != null && merged.latestVersionCode > currentVersionCode) {
+                onUpdateFound(merged)
+            } else if (repoSlug.isBlank() && isGuestMode) {
+                _userMessage.emit(str(R.string.settings_github_missing_repo))
             } else {
                 _userMessage.emit(str(R.string.update_up_to_date, currentVersionName))
             }

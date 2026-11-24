@@ -1310,7 +1310,8 @@ class CookingRepository(
                         doc.getString("releaseNotes").orEmpty()
                     },
                     requireLicense = doc.getBoolean("requireLicense") ?: false,
-                    supportContact = doc.getString("supportContact").orEmpty()
+                    supportContact = doc.getString("supportContact").orEmpty(),
+                    githubRepo = doc.getString("githubRepo").orEmpty()
                 )
             } else {
                 null

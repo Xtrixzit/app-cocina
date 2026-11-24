@@ -34,7 +34,8 @@ data class DistributionConfig(
     val updateUrl: String = "",
     val updateNotes: String = "",
     val requireLicense: Boolean = false,
-    val supportContact: String = ""
+    val supportContact: String = "",
+    val githubRepo: String = ""
 )
 
 @Keep

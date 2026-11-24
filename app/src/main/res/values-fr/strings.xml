@@ -77,7 +77,7 @@
     <string name="update_dialog_body">Recetario v%1$s est disponible.\n\n%2$s</string>
     <string name="update_dialog_required_body">Cette version nécessite la mise à jour vers v%1$s pour continuer.\n\n%2$s</string>
     <string name="update_dialog_action">Télécharger la mise à jour</string>
-    <string name="update_up_to_date">Vous utilisez déjà la dernière version (v%1$s).</string>
+    <string name="update_up_to_date">Votre application est déjà à jour (%1$s).</string>
     <string name="license_required_title">Activation requise</string>
     <string name="license_required_desc">Cette édition privée nécessite une licence active liée à votre compte pour continuer.</string>
     <string name="license_activated_msg">Licence activée avec succès.</string>
@@ -86,7 +86,7 @@
 
     <!-- Privacy Policy -->
     <string name="privacy_title">Politique de Confidentialité</string>
-    <string name="privacy_body">• Mode Invité : toutes vos données (recettes, stock, courses, photos et historique) restent uniquement sur votre appareil.\n\n• Compte Google : vos données sont stockées de façon privée sous votre identifiant Google dans Cloud Firestore.\n\n• Assistants vocaux (AppFunctions / App Actions) : exposent uniquement des résumés à l\'assistant système.\n\n• Contrôle total : exportez en JSON ou supprimez définitivement votre compte et toutes vos données depuis les Paramètres.</string>
+    <string name="privacy_body">• Mode Invité : toutes vos données (recettes, stock, courses, photos et historique) restent uniquement sur votre appareil.\n\n• Compte Google : vos données sont stockées de façon privée sous votre identifiant Google dans Cloud Firestore.\n\n• Google Drive IA (portée drive.file) : lors de la liaison Google, l\'app crée et met à jour uniquement le dossier « Recetario » (Google Docs, Sheets et Markdown pour Gemini), sans accéder à vos autres fichiers Drive.\n\n• Assistants vocaux (AppFunctions / App Actions) : exposent uniquement des résumés à l\'assistant système.\n\n• Contrôle total : exportez en JSON, Markdown ou CSV, ou supprimez définitivement votre compte et toutes vos données depuis les Paramètres.</string>
 
     <!-- Auth Screen -->
     <string name="auth_title">Recetario &amp; Stock</string>
@@ -116,7 +116,7 @@
     <string name="account_cloud_desc">Vos recettes, stock, historique de production et liste de courses sont synchronisés exclusivement avec votre compte Google (Cloud Firestore).</string>
     <string name="account_sync_now">Synchroniser</string>
     <string name="account_sign_out">Changer de compte / Déconnexion</string>
-    <string name="about_title">Recetario &amp; Stock • v%1$s</string>
+    <string name="about_title">Recetario &amp; Stock</string>
     <string name="about_guest_desc">Mode Invité actif : vos recettes, stocks et courses restent stockés localement. Expose vos données via AppFunctions et App Actions pour les assistants vocaux Android.</string>
     <string name="about_cloud_desc">Synchronisation cloud avec Google (Firestore). Expose stock, courses, ruptures et recettes via AppFunctions et App Actions pour les assistants vocaux Android.</string>
 
@@ -710,14 +710,14 @@
     <string name="tutorial_step7_b3_title">🤖 Lien Gemini / Assistant / Bixby</string>
     <string name="tutorial_step7_b3_desc">Connecté via AppFunctions et liens vocaux pour les assistants mobiles.</string>
 
-    <string name="tutorial_step8_title">8. Google Drive pour Gemini, Minuteurs et Viabilité</string>
-    <string name="tutorial_step8_sub">Partagez des formats lisibles avec les IA du mobile et suivez la cuisson :</string>
-    <string name="tutorial_step8_b1_title">☁️ Synchroniser Google Drive (Docs, Sheets et .md)</string>
-    <string name="tutorial_step8_b1_desc">Crée Google Docs, Sheets et Markdown dans le dossier Recetario pour que Gemini du téléphone puisse les lire (au lieu de .json).</string>
-    <string name="tutorial_step8_b2_title">🔗 Sync auto, Copier le lien et Exporter</string>
-    <string name="tutorial_step8_b2_desc">Mettez Drive à jour automatiquement, copiez le lien pour Gemini ou exportez en .md et .csv.</string>
-    <string name="tutorial_step8_b3_title">⏱️ Minuteurs et 🍳 Recettes réalisables</string>
-    <string name="tutorial_step8_b3_desc">Lancez des minuteurs (3m–30m) avec alarme et voyez les recettes prêtes à 100%%. Rejouez ce tutoriel à tout moment dans Paramètres.</string>
+    <string name="tutorial_step8_title">8. Minuteurs, Viabilité et Paramètres (Drive et MàJ)</string>
+    <string name="tutorial_step8_sub">Suivez la cuisson, la faisabilité des plats et les outils dans Paramètres :</string>
+    <string name="tutorial_step8_b1_title">⏱️ Minuteurs Post-It (3m–30m)</string>
+    <string name="tutorial_step8_b1_desc">Lancez des comptes à rebours rapides avec alarme persistante pendant la préparation.</string>
+    <string name="tutorial_step8_b2_title">🍳 Recettes prêtes à 100%% ou presque</string>
+    <string name="tutorial_step8_b2_desc">Voyez quels plats cuisiner selon votre stock réel et envoyez les manquants aux Courses.</string>
+    <string name="tutorial_step8_b3_title">⚙️ Paramètres : Google Drive IA, Confidentialité et MàJ</string>
+    <string name="tutorial_step8_b3_desc">Dans Paramètres ⚙️, liez Google Drive (Docs, Sheets, Markdown), activez la sync auto, consultez la confidentialité ou mettez à jour l\'app.</string>
 
     <!-- Enhanced Quantity & Price Calculations -->
     <string name="pantry_form_equiv_fmt">Équivalent : %1$s %2$s</string>
@@ -754,4 +754,83 @@
     <string name="prod_weight_output_line">Masse ingrédients : %1$s · Coût %2$s/kg · Vente %3$s/kg</string>
     <string name="prod_volume_output_line">Volume ingrédients : %1$s · Coût %2$s/L · Vente %3$s/L</string>
     <string name="prod_ing_unit_price_tag">Tarif : %1$s/%2$s</string>
+
+    <!-- Unified Settings Hub: Profile, Features, Extras & In-App Updates -->
+    <string name="settings_profile_section">Profil et Session Active</string>
+    <string name="settings_profile_guest_sub">Mode Invité · Données enregistrées uniquement sur cet appareil</string>
+    <string name="settings_profile_cloud_sub">Compte Google connecté · Cloud Firestore actif</string>
+    <string name="settings_profile_drive_linked">Google Drive IA lié automatiquement (%1$s)</string>
+    <string name="settings_profile_drive_pending">Google Drive IA prêt à être lié à votre compte Google</string>
+    <string name="settings_profile_drive_guest_note">Connectez un compte Google pour sauvegarder dans Firestore et lier Google Drive automatiquement.</string>
+    <string name="settings_general_section">Préférences et Calcul</string>
+    <string name="settings_extras_section">Fonctions Supplémentaires et IA</string>
+    <string name="settings_extras_chef_btn">Ouvrir Chef IA (Gemini)</string>
+    <string name="settings_features_section">Fonctionnalités et Capacités</string>
+    <string name="settings_features_list">• Recettes avec vraies photos (Caméra, Galerie, Références et IA photoréaliste).\n• Stock et courses avec conversions exactes (kg↔g, L↔ml, lb, oz) et calcul par lot ou unité.\n• Calculateur de production commerciale par portions, ingrédient clé ou lots avec coût/kg, coût/L et marge.\n• Liaison automatique Google Drive (Docs, Sheets et Markdown) pour Gemini et les assistants mobiles.\n• Commandes vocales mains libres, minuteurs et sauvegarde portable (.json / .md / .csv).</string>
+    <string name="settings_updates_section">Mises à jour depuis l\'App</string>
+    <string name="settings_updates_status_ok">Édition actuelle à jour (%1$s). Vérifiez en ligne pour mettre à jour directement depuis l\'application.</string>
+    <string name="settings_updates_status_available">Mise à jour disponible (%1$s) prête à télécharger et installer depuis l\'app.</string>
+    <string name="settings_install_update_btn">Mettre à jour maintenant (%1$s)</string>
+
+    <!-- Interactive Hands-On Tutorial Sandbox Strings -->
+    <string name="tutorial_mode_guest_banner">Session active : Invité (Local) · Opérez dans Recettes, Stock, Courses, Production, Minuteurs et Voix hors ligne. Liez Google dans Paramètres ⚙️ pour Cloud &amp; Drive.</string>
+    <string name="tutorial_mode_cloud_banner">Session active : Compte Google (%1$s) · Accès complet aux 5 onglets, Firestore Cloud, Google Drive IA auto, Chef IA et MàJ.</string>
+    <string name="tutorial_try_header">Essai pratique interactif (données d\'exemple)</string>
+    <string name="tutorial_try_sample_btn">Charger des données test</string>
+    <string name="tutorial_try_completed">✓ Essai terminé ! Vous avez testé cette section.</string>
+    <string name="tutorial_try_pending">Complétez l\'essai pratique ci-dessus (saisissez ou touchez une option) pour débloquer l\'étape suivante.</string>
+    <string name="tutorial_s1_prompt">Choisissez un profil pour voir les rubriques accessibles par cet utilisateur :</string>
+    <string name="tutorial_s1_guest_chip">Profil Invité (Local)</string>
+    <string name="tutorial_s1_google_chip">Compte Google (Cloud + Drive)</string>
+    <string name="tutorial_s1_guest_scope">Peut opérer dans : Recettes, Stock, Courses, Production, Minuteurs et Voix locale (sans Cloud ni Drive).</string>
+    <string name="tutorial_s1_google_scope">Peut opérer dans : les 5 rubriques + Cloud Firestore + Google Drive auto (Docs/Sheets) + Chef IA.</string>
+    <string name="tutorial_s2_prompt">Saisissez un plat test et choisissez sa catégorie pour simuler une recette :</string>
+    <string name="tutorial_s2_recipe_label">Nom de recette test</string>
+    <string name="tutorial_s2_recipe_hint">Ex. Lasagnes maison</string>
+    <string name="tutorial_s2_preview">Aperçu test : "%1$s" dans %2$s avec vraie photo %3$s.</string>
+    <string name="tutorial_s3_prompt">Ajustez les portions test (« Pâtes au Pesto ») pour voir le recalcul en direct :</string>
+    <string name="tutorial_s3_scaled_fmt">%1$d portions → %2$d g pâtes · %3$d g fromage · coût mis à jour.</string>
+    <string name="tutorial_s4_prompt">Entrez quantité en kg et prix du lot pour simuler le Garde-manger :</string>
+    <string name="tutorial_s4_qty_label">Quantité (kg)</string>
+    <string name="tutorial_s4_price_label">Prix du lot</string>
+    <string name="tutorial_s4_result_fmt">Résultat : %1$s g en stock · %2$s/kg (%3$s/g) · Stock sain.</string>
+    <string name="tutorial_s5_prompt">Saisissez un article à acheter et simulez le transfert vers Stock :</string>
+    <string name="tutorial_s5_item_label">Article test</string>
+    <string name="tutorial_s5_mark_btn">Marquer acheté → Stock</string>
+    <string name="tutorial_s5_result_fmt">Fait : "%1$s" acheté et ajouté au Garde-manger.</string>
+    <string name="tutorial_s6_prompt">Choisissez un mode commercial et ajustez la marge %% de test :</string>
+    <string name="tutorial_s6_margin_label">Marge %%</string>
+    <string name="tutorial_s6_result_fmt">Mode %1$s · Base $10.00 → Vente conseillée %2$s (+%3$s bénéfice).</string>
+    <string name="tutorial_s7_prompt">Touchez une commande vocale ou tapez une question test :</string>
+    <string name="tutorial_s7_q1">Combien de farine ai-je ?</string>
+    <string name="tutorial_s7_q2">Que puis-je cuisiner ?</string>
+    <string name="tutorial_s7_reply_prefix">Réponse vocale simulée : "%1$s" → 1.5 kg de farine / 2 recettes prêtes.</string>
+    <string name="tutorial_s8_prompt">Testez un minuteur rapide et vérifiez Google Drive dans Paramètres :</string>
+    <string name="tutorial_s8_drive_btn">Tester Paramètres ⚙️ → Drive IA</string>
+    <string name="tutorial_s8_result_fmt">Minuteur %1$dm simulé + Paramètres ⚙️ → Google Drive IA et MàJ vérifiés.</string>
+    <string name="tutorial_spotlight_hint">L\'élément mis en lumière vous montre où agir à l\'écran</string>
+
+    <!-- Drive API diagnostics & Auto-Link Permission Prompt -->
+    <string name="drive_api_disabled_friendly">L\'API Google Drive (drive.googleapis.com) est désactivée sur le projet Cloud (%1$s). Activez-la dans Google Cloud Console, patientez 2 minutes puis réessayez.</string>
+    <string name="drive_api_enable_console_btn">Activer l\'API Google Drive</string>
+    <string name="drive_perm_expired_friendly">Autorisation Google Drive expirée ou insuffisante. Touchez synchroniser pour réautoriser.</string>
+    <string name="drive_perm_dialog_title">Autorisation Google Drive requise</string>
+    <string name="drive_perm_dialog_body">Vous êtes connecté avec Google. Pour lier et enregistrer automatiquement vos recettes et votre stock dans Google Drive pour Gemini, il ne manque que l\'autorisation d\'accès à Drive.</string>
+    <string name="drive_perm_grant_btn">Accorder l\'accès Drive</string>
+    <string name="drive_perm_later_btn">Plus tard</string>
+    <string name="settings_profile_drive_needs_perm">Autorisation Google Drive requise pour finaliser la liaison automatique</string>
+
+    <!-- GitHub Releases Self-Update Strings -->
+    <string name="settings_github_repo_label">Dépôt GitHub (utilisateur/dépôt)</string>
+    <string name="settings_github_repo_hint">Ex. monutilisateur/recetario</string>
+    <string name="settings_github_repo_helper">En publiant une nouvelle Release (ex. v1.1 avec APK) sur GitHub, l\'application détectera automatiquement la mise à jour.</string>
+    <string name="settings_github_missing_repo">Indiquez votre dépôt GitHub (utilisateur/dépôt) dans Mises à jour pour vérifier les versions.</string>
+    <string name="update_source_github_badge">Nouvelle version publiée sur GitHub (%1$s)</string>
+
+    <!-- Free No-API / Zero-Billing Phone Drive Save & Share -->
+    <string name="drive_free_section_title">Option gratuite sans Google Cloud ni paiement :</string>
+    <string name="drive_free_section_desc">Enregistrez ou envoyez vos fichiers directement vers l\'app Google Drive ou Gemini de votre téléphone sans activer d\'API ni carte bancaire.</string>
+    <string name="drive_free_save_btn">Enregistrer dans Drive du téléphone (Gratuit / .md)</string>
+    <string name="drive_free_share_file_btn">Envoyer fichier à Drive / Gemini</string>
+    <string name="drive_free_save_doc_btn">Enregistrer Doc Google Docs (.html)</string>
 </resources>
