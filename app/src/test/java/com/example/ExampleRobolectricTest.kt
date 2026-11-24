@@ -60,6 +60,7 @@ import com.example.ai.RecipePhotoGenerator
 import com.example.data.sync.AiReadableExportFormatter
 import com.example.settings.DriveSyncInfo
 import com.example.ui.components.GuidedTutorialOverlay
+import com.example.ui.components.NotebookBottomBar
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
 import com.example.data.model.DistributionConfig
@@ -67,6 +68,8 @@ import com.example.data.sync.DriveApiDisabledException
 import com.example.data.sync.GitHubUpdateChecker
 import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.ui.components.CommercialSettingsDialog
+import com.example.ui.components.UpdateAvailableDialog
+import com.example.util.UpdateNotificationHelper
 import com.example.ui.components.DrivePermissionPromptDialog
 import com.example.ui.screens.ChefChatDialog
 import com.example.ui.screens.PantryFormDialog
@@ -1313,7 +1316,8 @@ class ExampleRobolectricTest {
             latestVersionName = "1.1",
             minRequiredVersionCode = BuildConfig.VERSION_CODE,
             updateUrl = "https://example.com/Recetario.apk",
-            updateNotes = "Nuevas mejoras de cocina"
+            updateNotes = "Nuevas mejoras de cocina",
+            githubRepo = "miusuario/recetario"
         )
 
         composeRule.setContent {
@@ -1335,6 +1339,7 @@ class ExampleRobolectricTest {
                     driveSyncError = "La API de Google Drive aún está deshabilitada",
                     driveActivationUrl = "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=1034453362537",
                     distributionConfig = updateCfg,
+                    updateCheckStatus = "Conectado a miusuario/recetario",
                     onDismiss = {},
                     onMigrateGuestToCloud = {},
                     onExportFullBackupJson = {},
@@ -1372,9 +1377,9 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("settings_open_chef_button").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("settings_export_md_button").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("settings_export_csv_button").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("settings_github_repo_input").performScrollTo().performTextInput("miusuario/recetario")
-        composeRule.waitForIdle()
-        assertEquals("miusuario/recetario", AppSettingsPreferences.getGithubRepo(context))
+        composeRule.onNodeWithTag("settings_github_repo_input").assertDoesNotExist()
+        composeRule.onNodeWithTag("settings_github_connected_badge").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("settings_update_check_status").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("settings_install_update_button").performScrollTo().assertIsDisplayed().performClick()
         assertTrue(updateOpened)
 
@@ -1384,7 +1389,6 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithTag("settings_privacy_policy_button").performScrollTo().performClick()
         assertTrue(privacyOpened)
 
-        AppSettingsPreferences.setGithubRepo(context, "")
         AppSettingsPreferences.setLanguageCode(context, "")
     }
 
@@ -1414,7 +1418,23 @@ class ExampleRobolectricTest {
         assertFalse(disabledEx.message!!.contains("SERVICE_DISABLED"))
         assertTrue(disabledEx.message!!.contains("1034453362537"))
 
+        assertEquals("Xtrixzit/app-cocina", BuildConfig.GITHUB_UPDATE_REPO)
+        assertEquals(
+            "Xtrixzit/app-cocina",
+            GitHubUpdateChecker.normalizeRepoSlug("https://github.com/Xtrixzit/app-cocina/blob/main/Recetario.apk")
+        )
         assertEquals("miusuario/recetario", GitHubUpdateChecker.normalizeRepoSlug("https://github.com/miusuario/recetario.git"))
+        assertEquals("miusuario/recetario", GitHubUpdateChecker.normalizeRepoSlug("https://github.com/miusuario/recetario/releases"))
+        val (parsedCode, parsedName) = GitHubUpdateChecker.parseGradleVersionInfo(
+            """
+            defaultConfig {
+                versionCode = 15
+                versionName = "1.2"
+            }
+            """.trimIndent()
+        )
+        assertEquals(15, parsedCode)
+        assertEquals("1.2", parsedName)
         assertTrue(GitHubUpdateChecker.isRemoteVersionNewer("v1.1", "", "", 13, "1.0"))
         assertFalse(GitHubUpdateChecker.isRemoteVersionNewer("v1.0", "", "", 13, "1.0"))
 
@@ -1432,9 +1452,10 @@ class ExampleRobolectricTest {
               ]
             }
         """.trimIndent()
-        val ghConfig = GitHubUpdateChecker.parseReleaseJson(releaseJson, 13, "1.0")
+        val ghConfig = GitHubUpdateChecker.parseReleaseJson(releaseJson, 13, "1.0", githubRepo = "miusuario/recetario")
         assertNotNull(ghConfig)
         assertEquals("v1.2", ghConfig!!.latestVersionName)
+        assertEquals("miusuario/recetario", ghConfig.githubRepo)
         assertTrue(ghConfig.latestVersionCode > 13)
         assertEquals(
             "https://github.com/miusuario/recetario/releases/download/v1.2/Recetario-v1.2.apk",
@@ -1465,6 +1486,73 @@ class ExampleRobolectricTest {
         assertTrue(cachedFile.exists())
         assertTrue(cachedFile.readText().contains("# Hola Recetario"))
 
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `notebookBottomBar displays all five colored tabs and switches selection`() {
+        var selectedBottomTab = 0
+        composeRule.setContent {
+            MyApplicationTheme {
+                NotebookBottomBar(
+                    selectedTab = selectedBottomTab,
+                    onTabSelected = { selectedBottomTab = it },
+                    pendingShoppingCount = 3
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tab_recipes").assertIsDisplayed()
+        composeRule.onNodeWithTag("tab_pantry").assertIsDisplayed()
+        composeRule.onNodeWithTag("tab_shopping").assertIsDisplayed()
+        composeRule.onNodeWithTag("tab_production").assertIsDisplayed()
+        composeRule.onNodeWithTag("tab_assistant").assertIsDisplayed().performClick()
+        assertEquals(4, selectedBottomTab)
+    }
+
+    @Test
+    fun `updateAvailableDialog offers one-tap update button and UpdateNotificationHelper deduplicates by versionCode`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        AppSettingsPreferences.setLastNotifiedUpdateVersion(context, 0)
+
+        // Should ignore current or older version codes
+        UpdateNotificationHelper.notifyIfNewVersion(
+            context = context,
+            remoteVersionCode = BuildConfig.VERSION_CODE,
+            remoteVersionName = BuildConfig.VERSION_NAME
+        )
+        assertEquals(0, AppSettingsPreferences.getLastNotifiedUpdateVersion(context))
+
+        // Should record notification once a higher version code arrives
+        val newerCode = BuildConfig.VERSION_CODE + 2
+        UpdateNotificationHelper.notifyIfNewVersion(
+            context = context,
+            remoteVersionCode = newerCode,
+            remoteVersionName = "2.1"
+        )
+        assertEquals(newerCode, AppSettingsPreferences.getLastNotifiedUpdateVersion(context))
+
+        var dismissedLater = false
+        composeRule.setContent {
+            MyApplicationTheme {
+                UpdateAvailableDialog(
+                    config = DistributionConfig(
+                        latestVersionCode = newerCode,
+                        latestVersionName = "2.1",
+                        updateUrl = "https://github.com/miusuario/recetario/releases/download/v2.1/Recetario.apk",
+                        updateNotes = "Actualización lista",
+                        githubRepo = "miusuario/recetario"
+                    ),
+                    isMandatory = false,
+                    onDismiss = { dismissedLater = true }
+                )
+            }
+        }
+        composeRule.onNodeWithTag("update_dialog_confirm_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("update_dialog_later_button").assertIsDisplayed().performClick()
+        assertTrue(dismissedLater)
+
+        AppSettingsPreferences.setLastNotifiedUpdateVersion(context, 0)
         AppSettingsPreferences.setLanguageCode(context, "")
     }
 }

@@ -50,7 +50,9 @@ import com.example.ui.theme.PostItYellow
 data class NotebookTabItem(
     val title: String,
     val icon: ImageVector,
-    val color: Color,
+    val activeColor: Color,
+    val inactiveColor: Color,
+    val accentInkColor: Color,
     val testTag: String
 )
 
@@ -65,31 +67,41 @@ fun NotebookBottomBar(
         NotebookTabItem(
             title = stringResource(R.string.tab_recipes),
             icon = Icons.Default.MenuBook,
-            color = PostItPeach,
+            activeColor = Color(0xFFFDBA74),
+            inactiveColor = PostItPeach,
+            accentInkColor = Color(0xFF7C2D12),
             testTag = "tab_recipes"
         ),
         NotebookTabItem(
             title = stringResource(R.string.tab_pantry),
             icon = Icons.Default.Inventory2,
-            color = PostItMint,
+            activeColor = Color(0xFF6EE7B7),
+            inactiveColor = PostItMint,
+            accentInkColor = Color(0xFF14532D),
             testTag = "tab_pantry"
         ),
         NotebookTabItem(
             title = stringResource(R.string.tab_shopping),
             icon = Icons.Default.Checklist,
-            color = PostItSky,
+            activeColor = Color(0xFF7DD3FC),
+            inactiveColor = PostItSky,
+            accentInkColor = Color(0xFF0C4A6E),
             testTag = "tab_shopping"
         ),
         NotebookTabItem(
             title = stringResource(R.string.tab_production),
             icon = Icons.Default.Scale,
-            color = PostItYellow,
+            activeColor = Color(0xFFFDE047),
+            inactiveColor = PostItYellow,
+            accentInkColor = Color(0xFF713F12),
             testTag = "tab_production"
         ),
         NotebookTabItem(
             title = stringResource(R.string.tab_cooking),
             icon = Icons.Default.RecordVoiceOver,
-            color = PostItPink,
+            activeColor = Color(0xFFF9A8D4),
+            inactiveColor = PostItPink,
+            accentInkColor = Color(0xFF831843),
             testTag = "tab_assistant"
         )
     )
@@ -110,19 +122,19 @@ fun NotebookBottomBar(
             }
             .background(bottomBgColor)
             .navigationBarsPadding()
-            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(68.dp),
+                .height(72.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             tabs.forEachIndexed { index, tab ->
                 val isSelected = selectedTab == index
                 val elevationDp by animateDpAsState(
-                    targetValue = if (isSelected) 6.dp else 1.dp,
+                    targetValue = if (isSelected) 6.dp else 2.dp,
                     animationSpec = spring(),
                     label = "tabElevation"
                 )
@@ -132,9 +144,9 @@ fun NotebookBottomBar(
                     label = "tabOffsetY"
                 )
 
-                val tabBackground = if (isSelected) tab.color else Color(0xFFECE7DB)
-                val inkColor = if (isSelected) Color(0xFF18181B) else Color(0xFF71717A)
-                val borderInk = if (isSelected) Color(0xFF1C1917) else Color(0xFFA8A29E)
+                val tabBackground = if (isSelected) tab.activeColor else tab.inactiveColor
+                val inkColor = if (isSelected) Color(0xFF18181B) else tab.accentInkColor
+                val borderInk = if (isSelected) Color(0xFF1C1917) else Color(0xFF44403C)
 
                 Box(
                     modifier = Modifier
@@ -151,7 +163,7 @@ fun NotebookBottomBar(
                         )
                         .sketchedBorder(
                             color = borderInk,
-                            strokeWidthDp = if (isSelected) 2f else 1.2f,
+                            strokeWidthDp = if (isSelected) 2.2f else 1.4f,
                             cornerRadiusDp = 10f
                         )
                         .stampClickable(onClick = { onTabSelected(index) })
@@ -206,7 +218,7 @@ fun NotebookBottomBar(
                             Box(
                                 modifier = Modifier
                                     .padding(top = 1.dp)
-                                    .size(width = 30.dp, height = 2.dp)
+                                    .size(width = 30.dp, height = 2.5.dp)
                                     .background(inkColor, RoundedCornerShape(1.dp))
                             )
                         }

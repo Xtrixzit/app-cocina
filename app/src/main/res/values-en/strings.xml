@@ -820,12 +820,26 @@
     <string name="drive_perm_later_btn">Later</string>
     <string name="settings_profile_drive_needs_perm">Google Drive permission is still needed to finish automatic linking</string>
 
-    <!-- GitHub Releases Self-Update Strings -->
-    <string name="settings_github_repo_label">GitHub Repository (owner/repo)</string>
-    <string name="settings_github_repo_hint">e.g. myuser/recetario</string>
-    <string name="settings_github_repo_helper">Whenever you publish a new GitHub Release (e.g. v1.1 with an APK), the app will detect it and offer the update automatically.</string>
-    <string name="settings_github_missing_repo">Enter your GitHub repository (owner/repo) under Updates to check for new releases.</string>
-    <string name="update_source_github_badge">New release published on GitHub (%1$s)</string>
+    <!-- App Update Channel & Notification Strings -->
+    <string name="settings_github_repo_label">GitHub Link or Repository</string>
+    <string name="settings_github_repo_hint">https://github.com/your-user/your-repo</string>
+    <string name="settings_github_repo_helper">Paste your GitHub project link. Whenever you push a new version (Release with APK or updated version code), the app detects and updates from here.</string>
+    <string name="settings_github_missing_repo">Official update channel will connect automatically on the next release build.</string>
+    <string name="settings_github_connected_fmt">Official update channel active</string>
+    <string name="settings_github_invalid_url">Configured update channel link is invalid.</string>
+    <string name="settings_github_checking">Checking for updates…</string>
+    <string name="settings_github_connect_and_check">Check for Updates</string>
+    <string name="settings_github_repo_not_found">Update channel is not published online yet.</string>
+    <string name="settings_github_check_error">Could not check for updates (%1$s). Check your internet and try again.</string>
+    <string name="settings_github_up_to_date">You are already on the latest version (%2$s).</string>
+    <string name="update_source_github_badge">New official update available (%1$s)</string>
+    <string name="update_open_release_page">View on GitHub</string>
+    <string name="update_now_action">Update now</string>
+    <string name="update_later_action">Later</string>
+    <string name="update_channel_name">Recetario Updates</string>
+    <string name="update_channel_desc">Alerts when a new version is ready to update inside the app</string>
+    <string name="update_notif_title">New update available (%1$s)</string>
+    <string name="update_notif_body">Tap to update Recetario directly from inside the app.</string>
 
     <!-- Free No-API / Zero-Billing Phone Drive Save & Share -->
     <string name="drive_free_section_title">Free option (no Google Cloud Console or billing):</string>

@@ -105,6 +105,7 @@ import com.example.ui.theme.CaveatFontFamily
 import com.example.ui.theme.MyApplicationTheme
 import com.example.util.AppShortcutsUpdater
 import com.example.util.LocaleHelper
+import com.example.util.UpdateNotificationHelper
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -123,6 +124,7 @@ data class VoiceLaunchRequest(
     val tab: Int = 0,
     val query: String? = null,
     val autoListen: Boolean = false,
+    val openUpdatePrompt: Boolean = false,
     val nonce: Long = 0L
 )
 
@@ -147,7 +149,11 @@ class MainActivity : ComponentActivity() {
                     initialTab = voiceLaunchState.tab,
                     voiceLaunchRequest = voiceLaunchState,
                     onConsumeVoiceLaunch = {
-                        voiceLaunchState = voiceLaunchState.copy(query = null, autoListen = false)
+                        voiceLaunchState = voiceLaunchState.copy(
+                            query = null,
+                            autoListen = false,
+                            openUpdatePrompt = false
+                        )
                     }
                 )
             }
@@ -230,7 +236,13 @@ class MainActivity : ComponentActivity() {
             else -> 0
         }
 
-        return VoiceLaunchRequest(tab = explicitTab, nonce = nowNonce)
+        val openUpdatePrompt = intent.getBooleanExtra(UpdateNotificationHelper.EXTRA_OPEN_UPDATE_PROMPT, false)
+
+        return VoiceLaunchRequest(
+            tab = explicitTab,
+            openUpdatePrompt = openUpdatePrompt,
+            nonce = nowNonce
+        )
     }
 }
 
@@ -361,6 +373,14 @@ fun MainFeatureScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var manualUpdateConfig by remember { mutableStateOf<DistributionConfig?>(null) }
+    var dismissedOptionalUpdateCode by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(voiceLaunchRequest.nonce, voiceLaunchRequest.openUpdatePrompt) {
+        if (voiceLaunchRequest.openUpdatePrompt) {
+            dismissedOptionalUpdateCode = 0
+            onConsumeVoiceLaunch()
+        }
+    }
 
     val distributionConfig by viewModel.distributionConfig.collectAsStateWithLifecycle()
     val licenseValidated by viewModel.licenseValidated.collectAsStateWithLifecycle()
@@ -369,6 +389,8 @@ fun MainFeatureScreen(
     val driveSyncing by viewModel.driveSyncing.collectAsStateWithLifecycle()
     val driveSyncError by viewModel.driveSyncError.collectAsStateWithLifecycle()
     val driveActivationUrl by viewModel.driveActivationUrl.collectAsStateWithLifecycle()
+    val checkingUpdates by viewModel.checkingUpdates.collectAsStateWithLifecycle()
+    val updateCheckStatus by viewModel.updateCheckStatus.collectAsStateWithLifecycle()
     val recipePhotoGenState by viewModel.recipePhotoGenState.collectAsStateWithLifecycle()
     val chefChatMessages by viewModel.chefChatMessages.collectAsStateWithLifecycle()
     val chefChatRole by viewModel.chefChatRole.collectAsStateWithLifecycle()
@@ -410,6 +432,11 @@ fun MainFeatureScreen(
 
     val forcedUpdateConfig = distributionConfig?.takeIf {
         it.minRequiredVersionCode > BuildConfig.VERSION_CODE
+    }
+    val optionalUpdateConfig = distributionConfig?.takeIf {
+        it.latestVersionCode > BuildConfig.VERSION_CODE &&
+            it.minRequiredVersionCode <= BuildConfig.VERSION_CODE &&
+            it.latestVersionCode != dismissedOptionalUpdateCode
     }
     val isLicenseBlocked = !isGuestMode && distributionConfig?.requireLicense == true && !licenseValidated
     val isUpdateBlocked = forcedUpdateConfig != null
@@ -739,6 +766,8 @@ fun MainFeatureScreen(
             driveActivationUrl = driveActivationUrl,
             driveNeedsPermissionPrompt = driveNeedsPermissionPrompt,
             distributionConfig = distributionConfig,
+            checkingUpdates = checkingUpdates,
+            updateCheckStatus = updateCheckStatus,
             onDismiss = { showSettingsDialog = false },
             onMigrateGuestToCloud = {
                 viewModel.migrateGuestDataToCloud()
@@ -833,6 +862,18 @@ fun MainFeatureScreen(
             config = manualUpdateConfig!!,
             isMandatory = false,
             onDismiss = { manualUpdateConfig = null }
+        )
+    } else if (
+        optionalUpdateConfig != null &&
+        guidedTutorialCompleted &&
+        !isLicenseBlocked &&
+        !showDrivePermissionNotice &&
+        !showSettingsDialog
+    ) {
+        UpdateAvailableDialog(
+            config = optionalUpdateConfig,
+            isMandatory = false,
+            onDismiss = { dismissedOptionalUpdateCode = optionalUpdateConfig.latestVersionCode }
         )
     }
 

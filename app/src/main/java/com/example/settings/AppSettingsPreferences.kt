@@ -82,6 +82,7 @@ object AppSettingsPreferences {
     private const val KEY_DRIVE_EMAIL = "drive_linked_email"
     private const val KEY_GUIDED_TUTORIAL_DONE = "guided_tutorial_completed"
     private const val KEY_GITHUB_REPO = "github_update_repo"
+    private const val KEY_LAST_NOTIFIED_UPDATE_VERSION = "last_notified_update_version"
 
     private val _currencyFlow = MutableStateFlow(CurrencyOption.USD)
     private val _marginFlow = MutableStateFlow(30)
@@ -303,6 +304,14 @@ object AppSettingsPreferences {
         val clean = rawRepo.trim()
         prefs(context).edit().putString(KEY_GITHUB_REPO, clean).apply()
         _githubRepoFlow.value = clean
+    }
+
+    fun getLastNotifiedUpdateVersion(context: Context): Int {
+        return prefs(context).getInt(KEY_LAST_NOTIFIED_UPDATE_VERSION, 0)
+    }
+
+    fun setLastNotifiedUpdateVersion(context: Context, versionCode: Int) {
+        prefs(context).edit().putInt(KEY_LAST_NOTIFIED_UPDATE_VERSION, versionCode).apply()
     }
 
     fun suggestedSellingPrice(cost: Double, marginPercent: Int): Double {

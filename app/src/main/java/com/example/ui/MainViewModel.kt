@@ -22,12 +22,14 @@ import com.example.BuildConfig
 import com.example.data.sync.AiReadableExportFormatter
 import com.example.data.sync.DriveApiDisabledException
 import com.example.data.sync.FullBackupManager
+import com.example.data.sync.GitHubUpdateCheckResult
 import com.example.data.sync.GitHubUpdateChecker
 import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppSettingsPreferences
 import com.example.settings.DriveSyncInfo
 import com.example.util.LocaleHelper
 import com.example.util.UnitConverter
+import com.example.util.UpdateNotificationHelper
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -107,6 +109,12 @@ class MainViewModel(
 
     val driveSyncInfo: StateFlow<DriveSyncInfo> =
         AppSettingsPreferences.observeDriveSyncInfo(repository.context)
+
+    private val _checkingUpdates = MutableStateFlow(false)
+    val checkingUpdates: StateFlow<Boolean> = _checkingUpdates.asStateFlow()
+
+    private val _updateCheckStatus = MutableStateFlow<String?>(null)
+    val updateCheckStatus: StateFlow<String?> = _updateCheckStatus.asStateFlow()
 
     private var autoDriveSyncJob: Job? = null
 
@@ -293,6 +301,15 @@ class MainViewModel(
                         )
                     }
                 }
+            }
+
+            val latestAvailable = _distributionConfig.value
+            if (latestAvailable != null && latestAvailable.latestVersionCode > BuildConfig.VERSION_CODE) {
+                UpdateNotificationHelper.notifyIfNewVersion(
+                    context = repository.context,
+                    remoteVersionCode = latestAvailable.latestVersionCode,
+                    remoteVersionName = latestAvailable.latestVersionName
+                )
             }
         }
     }
@@ -986,43 +1003,100 @@ class MainViewModel(
     }
 
     private fun resolveEffectiveGithubRepo(): String {
-        val localRepo = AppSettingsPreferences.getGithubRepo(repository.context)
-        if (localRepo.isNotBlank()) return GitHubUpdateChecker.normalizeRepoSlug(localRepo)
+        val baked = GitHubUpdateChecker.normalizeRepoSlug(BuildConfig.GITHUB_UPDATE_REPO)
+        if (baked.isNotBlank()) return baked
+        val localRepo = GitHubUpdateChecker.normalizeRepoSlug(AppSettingsPreferences.getGithubRepo(repository.context))
+        if (localRepo.isNotBlank()) return localRepo
         val remoteRepo = _distributionConfig.value?.githubRepo.orEmpty()
         return GitHubUpdateChecker.normalizeRepoSlug(remoteRepo)
     }
 
-    fun checkUpdatesManual(currentVersionCode: Int, currentVersionName: String, onUpdateFound: (DistributionConfig) -> Unit) {
+    fun checkUpdatesManual(
+        currentVersionCode: Int,
+        currentVersionName: String,
+        onUpdateFound: (DistributionConfig) -> Unit
+    ) {
+        if (_checkingUpdates.value) return
         viewModelScope.launch {
-            val firestoreCfg = if (!isGuestMode) repository.fetchDistributionConfig() else null
-            if (firestoreCfg != null) {
-                _distributionConfig.value = firestoreCfg
-            }
-            val repoSlug = AppSettingsPreferences.getGithubRepo(repository.context)
-                .ifBlank { firestoreCfg?.githubRepo.orEmpty() }
-                .let { GitHubUpdateChecker.normalizeRepoSlug(it) }
+            _checkingUpdates.value = true
+            _updateCheckStatus.value = null
+            try {
+                val firestoreCfg = if (!isGuestMode) repository.fetchDistributionConfig() else null
+                if (firestoreCfg != null) {
+                    _distributionConfig.value = firestoreCfg
+                }
+                val rawInput = BuildConfig.GITHUB_UPDATE_REPO
+                    .ifBlank { AppSettingsPreferences.getGithubRepo(repository.context) }
+                    .ifBlank { firestoreCfg?.githubRepo.orEmpty() }
+                val repoSlug = GitHubUpdateChecker.normalizeRepoSlug(rawInput)
 
-            val githubCfg = if (repoSlug.isNotBlank()) {
-                GitHubUpdateChecker.fetchLatestRelease(
-                    repoInput = repoSlug,
-                    currentVersionCode = currentVersionCode,
-                    currentVersionName = currentVersionName
-                ).getOrNull()
-            } else null
+                if (rawInput.isNotBlank() && repoSlug.isBlank()) {
+                    val invalidMsg = str(R.string.settings_github_invalid_url)
+                    _updateCheckStatus.value = invalidMsg
+                    _userMessage.emit(invalidMsg)
+                    return@launch
+                }
 
-            val merged = listOfNotNull(firestoreCfg, githubCfg)
-                .maxByOrNull { it.latestVersionCode }
+                val ghOutcome = if (repoSlug.isNotBlank()) {
+                    GitHubUpdateChecker.checkRepoUpdates(
+                        repoInput = repoSlug,
+                        currentVersionCode = currentVersionCode,
+                        currentVersionName = currentVersionName
+                    )
+                } else null
 
-            if (merged != null) {
-                _distributionConfig.value = merged
-            }
+                val githubCfg = (ghOutcome as? GitHubUpdateCheckResult.Success)?.config
+                val merged = listOfNotNull(firestoreCfg, githubCfg)
+                    .maxByOrNull { it.latestVersionCode }
 
-            if (merged != null && merged.latestVersionCode > currentVersionCode) {
-                onUpdateFound(merged)
-            } else if (repoSlug.isBlank() && isGuestMode) {
-                _userMessage.emit(str(R.string.settings_github_missing_repo))
-            } else {
-                _userMessage.emit(str(R.string.update_up_to_date, currentVersionName))
+                if (merged != null) {
+                    _distributionConfig.value = merged
+                }
+
+                if (merged != null && merged.latestVersionCode > currentVersionCode) {
+                    val verLabel = merged.latestVersionName.ifBlank { merged.latestVersionCode.toString() }
+                    _updateCheckStatus.value = str(R.string.settings_updates_status_available, verLabel)
+                    UpdateNotificationHelper.notifyIfNewVersion(
+                        context = repository.context,
+                        remoteVersionCode = merged.latestVersionCode,
+                        remoteVersionName = merged.latestVersionName
+                    )
+                    onUpdateFound(merged)
+                } else when (ghOutcome) {
+                    is GitHubUpdateCheckResult.RepoNotFound -> {
+                        val msg = str(R.string.settings_github_repo_not_found, ghOutcome.normalizedRepo)
+                        _updateCheckStatus.value = msg
+                        _userMessage.emit(msg)
+                    }
+                    is GitHubUpdateCheckResult.Failure -> {
+                        val msg = str(R.string.settings_github_check_error, ghOutcome.errorMessage)
+                        _updateCheckStatus.value = msg
+                        _userMessage.emit(msg)
+                    }
+                    GitHubUpdateCheckResult.InvalidRepoFormat -> {
+                        val msg = str(R.string.settings_github_invalid_url)
+                        _updateCheckStatus.value = msg
+                        _userMessage.emit(msg)
+                    }
+                    is GitHubUpdateCheckResult.Success -> {
+                        val msg = str(R.string.settings_github_up_to_date, ghOutcome.normalizedRepo, currentVersionName)
+                        _updateCheckStatus.value = msg
+                        _userMessage.emit(msg)
+                    }
+                    null -> {
+                        if (isGuestMode || firestoreCfg == null) {
+                            val msg = str(R.string.settings_github_missing_repo)
+                            _updateCheckStatus.value = msg
+                            _userMessage.emit(msg)
+                        } else {
+                            val msg = str(R.string.update_up_to_date, currentVersionName)
+                            _updateCheckStatus.value = msg
+                            _userMessage.emit(msg)
+                        }
+                    }
+                }
+            } finally {
+                _checkingUpdates.value = false
             }
         }
     }

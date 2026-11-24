@@ -19,6 +19,7 @@ android {
     targetSdk = 34
     versionCode = 13
     versionName = "1.0"
+    buildConfigField("String", "GITHUB_UPDATE_REPO", "\"Xtrixzit/app-cocina\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

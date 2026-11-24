@@ -820,12 +820,26 @@
     <string name="drive_perm_later_btn">Más tarde</string>
     <string name="settings_profile_drive_needs_perm">Falta conceder permiso de Google Drive para completar la vinculación automática</string>
 
-    <!-- GitHub Releases Self-Update Strings -->
-    <string name="settings_github_repo_label">Repositorio GitHub (usuario/repositorio)</string>
-    <string name="settings_github_repo_hint">Ej. miusuario/recetario</string>
-    <string name="settings_github_repo_helper">Al subir un nuevo Release (ej. v1.1 con APK) a tu GitHub, la app detectará y ofrecerá la actualización automáticamente.</string>
-    <string name="settings_github_missing_repo">Ingresa tu repositorio de GitHub (usuario/repositorio) en Actualizaciones para comprobar versiones nuevas.</string>
-    <string name="update_source_github_badge">Nueva versión publicada en GitHub (%1$s)</string>
+    <!-- App Update Channel & Notification Strings -->
+    <string name="settings_github_repo_label">Enlace o repositorio GitHub</string>
+    <string name="settings_github_repo_hint">https://github.com/tu-usuario/tu-proyecto</string>
+    <string name="settings_github_repo_helper">Pega el enlace de tu proyecto en GitHub. Al subir una nueva versión (Release con APK o código actualizado), la app la detectará y actualizará desde aquí.</string>
+    <string name="settings_github_missing_repo">El canal oficial de actualizaciones se conectará automáticamente en la próxima compilación.</string>
+    <string name="settings_github_connected_fmt">Canal oficial de actualizaciones activo</string>
+    <string name="settings_github_invalid_url">El enlace de actualización configurado no es válido.</string>
+    <string name="settings_github_checking">Buscando actualización…</string>
+    <string name="settings_github_connect_and_check">Buscar actualización ahora</string>
+    <string name="settings_github_repo_not_found">Canal de actualización aún no disponible en línea.</string>
+    <string name="settings_github_check_error">No se pudo verificar actualizaciones (%1$s). Revisa tu internet e intenta de nuevo.</string>
+    <string name="settings_github_up_to_date">Ya cuentas con la versión más reciente (%2$s).</string>
+    <string name="update_source_github_badge">Nueva actualización oficial disponible (%1$s)</string>
+    <string name="update_open_release_page">Ver en GitHub</string>
+    <string name="update_now_action">Actualizar ahora</string>
+    <string name="update_later_action">Más tarde</string>
+    <string name="update_channel_name">Actualizaciones de Recetario</string>
+    <string name="update_channel_desc">Avisos cuando haya una nueva versión lista para actualizar desde la app</string>
+    <string name="update_notif_title">Nueva actualización disponible (%1$s)</string>
+    <string name="update_notif_body">Toca para actualizar Recetario directamente desde la aplicación.</string>
 
     <!-- Free No-API / Zero-Billing Phone Drive Save & Share -->
     <string name="drive_free_section_title">Opción gratuita sin Google Cloud ni pagos:</string>

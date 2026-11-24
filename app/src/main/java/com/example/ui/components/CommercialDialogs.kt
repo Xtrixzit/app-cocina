@@ -131,6 +131,8 @@ fun CommercialSettingsDialog(
     driveActivationUrl: String? = null,
     driveNeedsPermissionPrompt: Boolean = false,
     distributionConfig: DistributionConfig? = null,
+    checkingUpdates: Boolean = false,
+    updateCheckStatus: String? = null,
     onDismiss: () -> Unit,
     onMigrateGuestToCloud: () -> Unit,
     onSyncCloudNow: () -> Unit = {},
@@ -160,15 +162,11 @@ fun CommercialSettingsDialog(
     val currentCurrency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
     val currentMargin by AppSettingsPreferences.observeMarginPercent(context).collectAsStateWithLifecycle()
     val savedLicense by AppSettingsPreferences.observeLicenseKey(context).collectAsStateWithLifecycle()
-    val savedGithubRepo by AppSettingsPreferences.observeGithubRepo(context).collectAsStateWithLifecycle()
 
     var languageExpanded by remember { mutableStateOf(false) }
     var currencyExpanded by remember { mutableStateOf(false) }
     var marginText by remember(currentMargin) { mutableStateOf(currentMargin.toString()) }
     var licenseInput by remember(savedLicense) { mutableStateOf(savedLicense) }
-    var githubRepoInput by remember(savedGithubRepo, distributionConfig?.githubRepo) {
-        mutableStateOf(savedGithubRepo.ifBlank { distributionConfig?.githubRepo.orEmpty() })
-    }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
     var pendingExportText by remember { mutableStateOf<String?>(null) }
@@ -1185,20 +1183,55 @@ fun CommercialSettingsDialog(
                                 }
                             }
 
-                            OutlinedTextField(
-                                value = githubRepoInput,
-                                onValueChange = { raw ->
-                                    githubRepoInput = raw
-                                    AppSettingsPreferences.setGithubRepo(context, raw)
-                                },
-                                label = { Text(stringResource(R.string.settings_github_repo_label)) },
-                                placeholder = { Text(stringResource(R.string.settings_github_repo_hint)) },
-                                supportingText = { Text(stringResource(R.string.settings_github_repo_helper)) },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("settings_github_repo_input")
-                            )
+                            val hasConfiguredChannel = BuildConfig.GITHUB_UPDATE_REPO.isNotBlank() ||
+                                !distributionConfig?.githubRepo.isNullOrBlank()
+                            if (hasConfiguredChannel) {
+                                Surface(
+                                    color = StockGreen.copy(alpha = 0.12f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("settings_github_connected_badge")
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = StockGreen,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.settings_github_connected_fmt),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = StockGreen
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (!updateCheckStatus.isNullOrBlank()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .sketchedBorder(color = BlueprintNavy.copy(alpha = 0.35f), strokeWidthDp = 1f)
+                                        .testTag("settings_update_check_status")
+                                ) {
+                                    Text(
+                                        text = updateCheckStatus,
+                                        fontFamily = PatrickHandFontFamily,
+                                        fontSize = 14.sp,
+                                        color = CharcoalInk,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
 
                             val pendingUpdateConfig = distributionConfig?.takeIf {
                                 it.latestVersionCode > BuildConfig.VERSION_CODE
@@ -1218,13 +1251,20 @@ fun CommercialSettingsDialog(
 
                             OutlinedButton(
                                 onClick = onCheckUpdates,
+                                enabled = !checkingUpdates,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("settings_check_updates_button")
                             ) {
-                                Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.settings_check_updates))
+                                if (checkingUpdates) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.settings_github_checking))
+                                } else {
+                                    Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.settings_github_connect_and_check))
+                                }
                             }
                         }
                     }
@@ -1448,11 +1488,28 @@ fun UpdateAvailableDialog(
             )
         },
         text = {
-            Text(
-                text = bodyText,
-                fontFamily = PatrickHandFontFamily,
-                fontSize = 16.sp
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (config.githubRepo.isNotBlank() || config.latestVersionCode > BuildConfig.VERSION_CODE) {
+                    Surface(
+                        color = PostItMint.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = stringResource(R.string.update_source_github_badge, versionLabel),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = StockGreen,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = bodyText,
+                    fontFamily = PatrickHandFontFamily,
+                    fontSize = 16.sp
+                )
+            }
         },
         confirmButton = {
             if (config.updateUrl.isNotBlank()) {
@@ -1462,20 +1519,29 @@ fun UpdateAvailableDialog(
                             context.startActivity(Intent(Intent.ACTION_VIEW, config.updateUrl.toUri()))
                         } catch (_: Exception) {
                         }
-                    }
+                    },
+                    modifier = Modifier.testTag("update_dialog_confirm_button")
                 ) {
-                    Text(stringResource(R.string.update_dialog_action))
+                    Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.update_now_action))
                 }
             } else if (!isMandatory) {
-                TextButton(onClick = onDismiss) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("update_dialog_confirm_button")
+                ) {
                     Text(stringResource(R.string.action_understood))
                 }
             }
         },
         dismissButton = {
             if (!isMandatory) {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.action_close))
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("update_dialog_later_button")
+                ) {
+                    Text(stringResource(R.string.update_later_action))
                 }
             }
         }
