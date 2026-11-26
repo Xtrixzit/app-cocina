@@ -112,6 +112,7 @@ import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.util.LocaleHelper
+import com.example.util.SecurityUtils
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -165,7 +166,7 @@ fun CommercialSettingsDialog(
 
     var languageExpanded by remember { mutableStateOf(false) }
     var currencyExpanded by remember { mutableStateOf(false) }
-    var marginText by remember(currentMargin) { mutableStateOf(currentMargin.toString()) }
+    var marginText by remember(currentMargin) { mutableStateOf(if (currentMargin > 0) currentMargin.toString() else "") }
     var licenseInput by remember(savedLicense) { mutableStateOf(savedLicense) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
@@ -596,10 +597,7 @@ fun CommercialSettingsDialog(
                                         if (!driveActivationUrl.isNullOrBlank()) {
                                             OutlinedButton(
                                                 onClick = {
-                                                    try {
-                                                        context.startActivity(Intent(Intent.ACTION_VIEW, driveActivationUrl.toUri()))
-                                                    } catch (_: Exception) {
-                                                    }
+                                                    SecurityUtils.safeOpenHttpsUrl(context, driveActivationUrl)
                                                 },
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -679,10 +677,7 @@ fun CommercialSettingsDialog(
                                     if (driveSyncInfo.docWebLink.isNotBlank()) {
                                         OutlinedButton(
                                             onClick = {
-                                                try {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, driveSyncInfo.docWebLink.toUri()))
-                                                } catch (_: Exception) {
-                                                }
+                                                SecurityUtils.safeOpenHttpsUrl(context, driveSyncInfo.docWebLink)
                                             },
                                             modifier = Modifier.testTag("drive_open_doc_button")
                                         ) {
@@ -706,10 +701,7 @@ fun CommercialSettingsDialog(
                                     if (driveSyncInfo.sheetWebLink.isNotBlank()) {
                                         OutlinedButton(
                                             onClick = {
-                                                try {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, driveSyncInfo.sheetWebLink.toUri()))
-                                                } catch (_: Exception) {
-                                                }
+                                                SecurityUtils.safeOpenHttpsUrl(context, driveSyncInfo.sheetWebLink)
                                             },
                                             modifier = Modifier.testTag("drive_open_sheet_button")
                                         ) {
@@ -930,11 +922,10 @@ fun CommercialSettingsDialog(
                                 onValueChange = { raw ->
                                     val filtered = raw.filter { it.isDigit() }
                                     marginText = filtered
-                                    filtered.toIntOrNull()?.let { pct ->
-                                        AppSettingsPreferences.setMarginPercent(context, pct)
-                                    }
+                                    AppSettingsPreferences.setMarginPercent(context, filtered.toIntOrNull() ?: 0)
                                 },
                                 label = { Text(stringResource(R.string.settings_margin)) },
+                                placeholder = { Text("0") },
                                 supportingText = { Text(stringResource(R.string.settings_margin_hint)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
@@ -1515,10 +1506,7 @@ fun UpdateAvailableDialog(
             if (config.updateUrl.isNotBlank()) {
                 Button(
                     onClick = {
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, config.updateUrl.toUri()))
-                        } catch (_: Exception) {
-                        }
+                        SecurityUtils.safeOpenHttpsUrl(context, config.updateUrl)
                     },
                     modifier = Modifier.testTag("update_dialog_confirm_button")
                 ) {

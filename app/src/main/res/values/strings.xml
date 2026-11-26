@@ -54,7 +54,7 @@
     <string name="settings_language">Idioma de la aplicación</string>
     <string name="settings_currency">Moneda</string>
     <string name="settings_margin">Margen de ganancia sugerido (%)</string>
-    <string name="settings_margin_hint">Ejemplo: 30% suma un 30% sobre tu costo de producción para sugerir precio de venta.</string>
+    <string name="settings_margin_hint">Si queda vacío o en 0, no se calcula venta ni ganancia. Ejemplo: 30 suma 30% sobre tu costo.</string>
     <string name="settings_backup_section">Respaldo completo y migración</string>
     <string name="settings_export_backup_file">Exportar respaldo (.json)</string>
     <string name="settings_import_backup_file">Importar respaldo (.json)</string>
@@ -124,11 +124,14 @@
     <string name="cat_all">Todas</string>
     <string name="cat_breakfast">Desayunos</string>
     <string name="cat_lunch">Almuerzos</string>
+    <string name="cat_meals">Comidas</string>
     <string name="cat_dinner">Cenas</string>
+    <string name="cat_bread">Pan</string>
     <string name="cat_desserts">Postres</string>
     <string name="cat_snacks">Snacks</string>
     <string name="cat_drinks">Bebidas</string>
     <string name="cat_soups">Sopas</string>
+    <string name="cat_custom">Otra categoría</string>
     <string name="cat_pantry">Despensa</string>
     <string name="cat_vegetables">Verduras</string>
     <string name="cat_fruits">Frutas</string>
@@ -170,7 +173,7 @@
     <string name="recipes_empty_search">No se encontraron recetas</string>
     <string name="recipes_empty_none">Aún no tienes recetas guardadas</string>
     <string name="recipes_empty_search_tip">Prueba con otro término de búsqueda</string>
-    <string name="recipes_empty_none_tip">Comienza agregando tu primera receta o carga las recetas de ejemplo para probar.</string>
+    <string name="recipes_empty_none_tip">Comienza tocando \"+ Nueva Receta\" para guardar tu primera receta.</string>
     <string name="recipes_seed_samples">Cargar recetas de ejemplo</string>
     <string name="recipe_card_pantry_full">100% en despensa</string>
     <string name="recipe_card_pantry_pct">%1$d%% en despensa</string>
@@ -638,6 +641,9 @@
     <!-- Mandatory Guided Tutorial -->
     <string name="settings_replay_tutorial_btn">Repetir tutorial guiado paso a paso</string>
     <string name="tutorial_header_badge">Tutorial obligatorio</string>
+    <string name="tutorial_header_badge_optional">Tutorial guiado</string>
+    <string name="tutorial_skip_btn">Omitir</string>
+    <string name="tutorial_skip_returning_btn">Omitir tutorial</string>
     <string name="tutorial_progress_fmt">Paso %1$d de %2$d</string>
     <string name="tutorial_must_finish_note">Debes completar los %1$d pasos para desbloquear el uso libre de Recetario.</string>
     <string name="tutorial_confirm_check">Confirmo que revisé cada botón y función de esta pantalla</string>
@@ -737,6 +743,12 @@
     <string name="recipe_form_line_cost_preview">Costo en receta: %1$s</string>
     <string name="recipe_form_summary_title">Resumen de costos de la receta</string>
     <string name="recipe_form_summary_line">Total (%1$d porc.): %2$s · Porción: %3$s · Venta (+%4$d%%): %5$s</string>
+    <string name="recipe_form_summary_cost_only">Total (%1$d porc.): %2$s · Porción: %3$s</string>
+    <string name="recipe_form_cat_select_hint">Seleccionar categoría</string>
+    <string name="recipe_form_diff_select_hint">Opcional</string>
+    <string name="recipe_form_cat_custom_label">Nombre de la categoría</string>
+    <string name="recipe_form_cat_custom_hint">Ej. Panadería, Pastas, Repostería</string>
+    <string name="recipe_detail_cost_not_entered">Sin costos ingresados. Toca cualquier ingrediente abajo para asignar su costo.</string>
 
     <string name="recipe_detail_custom_servings_btn">Exacto</string>
     <string name="recipe_detail_custom_servings_title">Cantidad exacta de porciones</string>
@@ -753,7 +765,15 @@
     <string name="prod_suggested_per_portion">Precio sugerido/porc. (+%1$d%%): %2$s</string>
     <string name="prod_weight_output_line">Peso ingredientes: %1$s · Costo %2$s/kg · Venta %3$s/kg</string>
     <string name="prod_volume_output_line">Volumen ingredientes: %1$s · Costo %2$s/L · Venta %3$s/L</string>
+    <string name="prod_weight_cost_only_line">Peso ingredientes: %1$s · Costo %2$s/kg</string>
+    <string name="prod_volume_cost_only_line">Volumen ingredientes: %1$s · Costo %2$s/L</string>
     <string name="prod_ing_unit_price_tag">Tarifa: %1$s/%2$s</string>
+    <string name="prod_margin_inline_label">Margen de ganancia (%) - Opcional</string>
+    <string name="prod_margin_inline_hint">Ej. 30 (deja vacío si aún no calculas venta)</string>
+    <string name="prod_no_costs_entered">Sin costos ingresados. Asigna precios en Despensa o en la receta para calcular costos.</string>
+    <string name="prod_no_margin_entered">Ingresa tu %% de ganancia para calcular precio de venta y ganancia.</string>
+    <string name="prod_history_cost_only_row">%1$d porc. • Costo: %2$s</string>
+    <string name="prod_history_empty_cost_row">%1$d porc. • Sin costos ingresados</string>
 
     <!-- Unified Settings Hub: Profile, Features, Extras & In-App Updates -->
     <string name="settings_profile_section">Perfil y Sesión Activa</string>
@@ -847,4 +867,23 @@
     <string name="drive_free_save_btn">Guardar en Drive del celular (Gratis / .md)</string>
     <string name="drive_free_share_file_btn">Enviar archivo a Drive / Gemini</string>
     <string name="drive_free_save_doc_btn">Guardar Documento para Google Docs (.html)</string>
+
+    <!-- Fallback & Export Localization -->
+    <string name="default_product_name">Producto</string>
+    <string name="default_recipe_name">Receta</string>
+    <string name="untitled_recipe_name">Receta sin título</string>
+    <string name="prod_short_servings_fmt">%1$s (%2$d porc.)</string>
+    <string name="recipe_card_per_serving_fmt">%1$s (%2$s/porc.)</string>
+    <string name="ai_doc_serv_short">porc.</string>
+    <string name="ai_doc_col_category">Categoría</string>
+    <string name="ai_doc_col_product">Producto</string>
+    <string name="ai_doc_col_quantity">Cantidad</string>
+    <string name="ai_doc_col_status">Estado</string>
+    <string name="ai_doc_col_notes_cost">Notas / Costo</string>
+    <string name="ai_doc_csv_header">Tipo,Categoría,Nombre,Cantidad,Unidad,Estado_o_Mínimo,Costo,Detalle_Ingredientes</string>
+    <string name="ai_doc_csv_type_pantry">Despensa</string>
+    <string name="ai_doc_csv_type_shopping">Compras</string>
+    <string name="ai_doc_csv_type_recipe">Receta</string>
+    <string name="ai_doc_csv_unit_servings">porciones</string>
+    <string name="url_https_only_error">Ingresa una URL segura que comience con https://</string>
 </resources>

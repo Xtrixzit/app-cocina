@@ -238,4 +238,30 @@ test("Commercial distribution: app_config read-only get & licenses single-claim 
       activatedAt: new Date(Date.now() - 1000),
     })
   );
+
+  // Even Alice cannot re-claim / reset activatedAt or assignedEmail once claimed
+  await assertFails(
+    aliceDb.collection("licenses").doc("LIC-2026-TEST").update({
+      assignedUid: ALICE_UID,
+      assignedEmail: "alice+2@gmail.com",
+      activatedAt: new Date(Date.now() - 500),
+    })
+  );
+
+  // Expired license cannot be claimed
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().collection("licenses").doc("LIC-EXPIRED").set({
+      active: true,
+      assignedUid: "",
+      assignedEmail: "",
+      expiresAt: new Date(Date.now() - 60000),
+    });
+  });
+  await assertFails(
+    bobDb.collection("licenses").doc("LIC-EXPIRED").update({
+      assignedUid: BOB_UID,
+      assignedEmail: "bob@gmail.com",
+      activatedAt: new Date(Date.now() - 1000),
+    })
+  );
 });

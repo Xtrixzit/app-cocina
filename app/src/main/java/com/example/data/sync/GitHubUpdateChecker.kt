@@ -158,14 +158,16 @@ object GitHubUpdateChecker {
             else -> currentVersionCode
         }
 
+        val safeApkUrl = apkUrl.takeIf { com.example.util.SecurityUtils.isSafeHttpsUrl(it) }.orEmpty()
+        val safeHtmlUrl = htmlUrl.takeIf { com.example.util.SecurityUtils.isSafeHttpsUrl(it) }.orEmpty()
         return DistributionConfig(
             latestVersionCode = effectiveVersionCode,
             latestVersionName = displayVersion,
             minRequiredVersionCode = 0,
-            updateUrl = apkUrl.ifBlank { htmlUrl },
+            updateUrl = safeApkUrl.ifBlank { safeHtmlUrl },
             updateNotes = bodyNotes.ifBlank { releaseName },
             requireLicense = false,
-            supportContact = htmlUrl,
+            supportContact = safeHtmlUrl,
             githubRepo = githubRepo
         )
     }
@@ -300,9 +302,13 @@ object GitHubUpdateChecker {
             client.newCall(apkReq).execute().use { resp ->
                 if (!resp.isSuccessful) return null
                 val obj = JSONObject(resp.body?.string().orEmpty())
-                obj.optString("download_url", "").trim().ifBlank {
+                val rawDownloadUrl = obj.optString("download_url", "").trim()
+                val candidate = if (com.example.util.SecurityUtils.isSafeHttpsUrl(rawDownloadUrl)) {
+                    rawDownloadUrl
+                } else {
                     "https://github.com/$slug/raw/$defaultBranch/Recetario.apk"
                 }
+                candidate.takeIf { com.example.util.SecurityUtils.isSafeHttpsUrl(it) }
             }
         } catch (_: Exception) {
             null

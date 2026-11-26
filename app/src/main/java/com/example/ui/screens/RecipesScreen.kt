@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +70,7 @@ import com.example.ui.theme.PostItPink
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 
 @Composable
@@ -89,7 +91,15 @@ fun RecipesScreen(
     val selectedCategory by viewModel.selectedRecipeCategory.collectAsState()
     val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
 
-    val categories = listOf("Todas", "Desayunos", "Almuerzos", "Cenas", "Postres", "Snacks", "Bebidas", "Sopas")
+    val baseCategories = listOf("Todas", "Desayunos", "Almuerzos", "Comidas", "Cenas", "Pan", "Postres", "Snacks", "Bebidas", "Sopas")
+    val customCategories = remember(recipesUiState) {
+        val successRecipes = (recipesUiState as? UiState.Success)?.data.orEmpty()
+        successRecipes
+            .map { it.category.trim() }
+            .filter { cat -> cat.isNotBlank() && baseCategories.none { it.equals(cat, ignoreCase = true) } }
+            .distinctBy { it.lowercase() }
+    }
+    val categories = baseCategories + customCategories
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -295,8 +305,8 @@ fun RecipesScreen(
                 items(categories) { cat ->
                     val color = when (cat) {
                         "Todas" -> PostItYellow
-                        "Desayunos" -> PostItPeach
-                        "Almuerzos" -> PostItMint
+                        "Desayunos", "Pan" -> PostItPeach
+                        "Almuerzos", "Comidas" -> PostItMint
                         "Cenas" -> PostItSky
                         "Postres" -> PostItPink
                         else -> PostItYellow
@@ -405,17 +415,6 @@ fun RecipesScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
-
-                            if (state.data.isEmpty()) {
-                                Spacer(modifier = Modifier.height(20.dp))
-                                PostItButton(
-                                    text = stringResource(R.string.recipes_seed_samples),
-                                    onClick = { viewModel.seedSampleRecipes() },
-                                    backgroundColor = PostItYellow,
-                                    fontSize = 20.sp,
-                                    modifier = Modifier.testTag("seed_sample_recipes_button")
-                                )
-                            }
                         }
                     } else {
                         LazyColumn(
@@ -427,7 +426,7 @@ fun RecipesScreen(
                                 var totalRecipeCost = 0.0
                                 recipe.ingredients.forEach { ing ->
                                     val inPantry = pantryItems.find {
-                                        it.name.trim().equals(ing.name.trim(), ignoreCase = true)
+                                        SampleContentLocalizer.sameItemName(it.name, ing.name)
                                     }
                                     val inPantryQty = UnitConverter.availableInTargetUnit(inPantry, ing.unit)
                                     if (inPantryQty + 0.0001 >= ing.amount && ing.amount > 0) available++

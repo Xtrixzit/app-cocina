@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.PlayArrow
@@ -62,6 +64,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,8 +92,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -252,9 +258,10 @@ object GuidedTutorialCatalog {
 }
 
 /**
- * Mandatory, non-skippable spotlight coach-mark tutorial:
+ * Spotlight coach-mark tutorial:
  * Softly dims & frames everything except the highlighted real button/tab in focus,
  * while floating a compact interactive Post-It card on the opposite half of the screen.
+ * Allows skipping immediately when [canSkipTutorial] is true (e.g., previously logged-in user).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -263,6 +270,8 @@ fun GuidedTutorialOverlay(
     onCompleted: () -> Unit,
     isGuestMode: Boolean = true,
     currentUserEmail: String = "",
+    canSkipTutorial: Boolean = true,
+    onSkip: () -> Unit = onCompleted,
     tutorialTargets: Map<String, Rect> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
@@ -427,15 +436,16 @@ fun GuidedTutorialOverlay(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Compact Header Row: Mandatory spotlight badge + Step X / 8
+                    // Compact Header Row: Spotlight badge (shrinks gracefully) + Always-visible Skip + Step X / 8
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
                             color = step.accentColor.copy(alpha = 0.92f),
-                            shape = RoundedCornerShape(9.dp)
+                            shape = RoundedCornerShape(9.dp),
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -449,21 +459,60 @@ fun GuidedTutorialOverlay(
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = stringResource(R.string.tutorial_header_badge),
+                                    text = stringResource(
+                                        if (canSkipTutorial) R.string.tutorial_header_badge_optional
+                                        else R.string.tutorial_header_badge
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = CharcoalInk
+                                    color = CharcoalInk,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        Text(
-                            text = stringResource(R.string.tutorial_progress_fmt, currentStepIndex + 1, totalSteps),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = BlueprintNavy,
-                            modifier = Modifier.testTag("tutorial_progress_label")
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (canSkipTutorial) {
+                                val skipDesc = stringResource(R.string.tutorial_skip_returning_btn)
+                                TextButton(
+                                    onClick = onSkip,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier
+                                        .semantics { contentDescription = skipDesc }
+                                        .testTag("tutorial_skip_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = BlueprintNavy,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = stringResource(R.string.tutorial_skip_btn),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BlueprintNavy,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = stringResource(R.string.tutorial_progress_fmt, currentStepIndex + 1, totalSteps),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = BlueprintNavy,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.testTag("tutorial_progress_label")
+                            )
+                        }
                     }
 
                     LinearProgressIndicator(
@@ -827,8 +876,8 @@ fun GuidedTutorialOverlay(
                                                 value = samplePantryKgText,
                                                 onValueChange = {
                                                     samplePantryKgText = it
-                                                    val q = UnitConverter.parseDecimal(it) ?: 0.0
-                                                    val p = UnitConverter.parseDecimal(samplePantryCostText) ?: 0.0
+                                                    val q = UnitConverter.parseNonNegativeDecimal(it) ?: 0.0
+                                                    val p = UnitConverter.parseNonNegativeDecimal(samplePantryCostText) ?: 0.0
                                                     if (q > 0.0 && p > 0.0) trialDone[3] = true
                                                 },
                                                 label = { Text(stringResource(R.string.tutorial_s4_qty_label)) },
@@ -843,8 +892,8 @@ fun GuidedTutorialOverlay(
                                                 value = samplePantryCostText,
                                                 onValueChange = {
                                                     samplePantryCostText = it
-                                                    val q = UnitConverter.parseDecimal(samplePantryKgText) ?: 0.0
-                                                    val p = UnitConverter.parseDecimal(it) ?: 0.0
+                                                    val q = UnitConverter.parseNonNegativeDecimal(samplePantryKgText) ?: 0.0
+                                                    val p = UnitConverter.parseNonNegativeDecimal(it) ?: 0.0
                                                     if (q > 0.0 && p > 0.0) trialDone[3] = true
                                                 },
                                                 label = { Text(stringResource(R.string.tutorial_s4_price_label)) },
@@ -856,8 +905,8 @@ fun GuidedTutorialOverlay(
                                                     .testTag("tutorial_s4_price_input")
                                             )
                                         }
-                                        val kgVal = UnitConverter.parseDecimal(samplePantryKgText) ?: 0.0
-                                        val costVal = UnitConverter.parseDecimal(samplePantryCostText) ?: 0.0
+                                        val kgVal = UnitConverter.parseNonNegativeDecimal(samplePantryKgText) ?: 0.0
+                                        val costVal = UnitConverter.parseNonNegativeDecimal(samplePantryCostText) ?: 0.0
                                         if (kgVal > 0.0 && costVal > 0.0) {
                                             val gramsVal = UnitConverter.convert(kgVal, "kg", "g") ?: (kgVal * 1000.0)
                                             val perKg = costVal / kgVal

@@ -52,6 +52,8 @@ object ImageUtils {
             norm.contains("desayuno") || norm.contains("breakfast") || norm.contains("café") || norm.contains("petit") -> REF_PANCAKES
             norm.contains("postre") || norm.contains("dessert") || norm.contains("sobremesa") -> REF_DESSERT
             norm.contains("cena") || norm.contains("dinner") || norm.contains("jantar") || norm.contains("pasta") -> REF_PASTA
+            norm == "pan" || norm.contains("panad") || norm.contains("bread") || norm.contains("pão") || norm.contains("pain") -> REF_PANCAKES
+            norm.contains("comida") || norm.contains("meal") || norm.contains("refei") || norm.contains("repas") -> REF_LUNCH
             norm.contains("snack") || norm.contains("tortilla") -> REF_TORTILLA
             else -> REF_LUNCH
         }
@@ -175,7 +177,7 @@ object ImageUtils {
                     val opts = BitmapFactory.Options().apply { inSampleSize = sample }
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
                 }
-                trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> {
+                SecurityUtils.isSafeHttpsUrl(trimmed) -> {
                     val conn = java.net.URL(trimmed).openConnection().apply {
                         connectTimeout = 8000
                         readTimeout = 8000
@@ -245,6 +247,6 @@ object ImageUtils {
                 trimmed
             }
         }
-        return trimmed
+        return SecurityUtils.sanitizeImageUri(trimmed)
     }
 }

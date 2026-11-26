@@ -16,7 +16,7 @@ data class ProductionLog(
     val scaleFactor: Double = 1.0,
     val totalCost: Double = 0.0,
     val currencyCode: String = "USD",
-    val marginPercent: Int = 30,
+    val marginPercent: Int = 0,
     val suggestedPrice: Double = 0.0,
     val deductedIngredientsCount: Int = 0,
     val createdAt: Timestamp? = null

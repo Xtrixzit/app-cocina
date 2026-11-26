@@ -111,6 +111,8 @@ import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
+import com.example.util.SecurityUtils
 import com.example.util.UnitConverter
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
@@ -134,12 +136,24 @@ fun RecipeFormDialog(
     val marginPercent by AppSettingsPreferences.observeMarginPercent(context).collectAsStateWithLifecycle()
     val isEdit = initialRecipe != null
 
+    val baseCategories = listOf("Desayunos", "Almuerzos", "Comidas", "Cenas", "Pan", "Postres", "Snacks", "Bebidas", "Sopas")
+    val initialCat = initialRecipe?.category?.trim().orEmpty()
+    val initialIsCustomCat = initialCat.isNotBlank() && baseCategories.none { it.equals(initialCat, ignoreCase = true) }
+
     var title by remember { mutableStateOf(initialRecipe?.title ?: "") }
-    var category by remember { mutableStateOf(initialRecipe?.category ?: "Almuerzos") }
-    var servings by remember { mutableIntStateOf(initialRecipe?.servings ?: 4) }
-    var prepTime by remember { mutableIntStateOf(initialRecipe?.prepTimeMinutes ?: 15) }
-    var cookTime by remember { mutableIntStateOf(initialRecipe?.cookTimeMinutes ?: 30) }
-    var difficulty by remember { mutableStateOf(initialRecipe?.difficulty ?: "Fácil") }
+    var category by remember { mutableStateOf(if (initialIsCustomCat) "" else initialCat) }
+    var isCustomCategory by remember { mutableStateOf(initialIsCustomCat) }
+    var customCategoryText by remember { mutableStateOf(if (initialIsCustomCat) initialCat else "") }
+    var servingsText by remember {
+        mutableStateOf(if (initialRecipe != null && initialRecipe.servings > 0) initialRecipe.servings.toString() else "")
+    }
+    var prepTimeText by remember {
+        mutableStateOf(if (initialRecipe != null && initialRecipe.prepTimeMinutes > 0) initialRecipe.prepTimeMinutes.toString() else "")
+    }
+    var cookTimeText by remember {
+        mutableStateOf(if (initialRecipe != null && initialRecipe.cookTimeMinutes > 0) initialRecipe.cookTimeMinutes.toString() else "")
+    }
+    var difficulty by remember { mutableStateOf(initialRecipe?.difficulty ?: "") }
     var notes by remember { mutableStateOf(initialRecipe?.notes ?: "") }
     var imageUrl by remember { mutableStateOf(initialRecipe?.imageUrl ?: "") }
     var showUrlPhotoDialog by remember { mutableStateOf(false) }
@@ -171,7 +185,7 @@ fun RecipeFormDialog(
             if (initialRecipe != null && initialRecipe.ingredients.isNotEmpty()) {
                 addAll(initialRecipe.ingredients)
             } else {
-                add(RecipeIngredient(name = "", amount = 100.0, unit = "g", category = "Despensa"))
+                add(RecipeIngredient(name = "", amount = 0.0, unit = "g", category = "Despensa"))
             }
         }
     }
@@ -220,7 +234,7 @@ fun RecipeFormDialog(
         }
     }
 
-    val categories = listOf("Desayunos", "Almuerzos", "Cenas", "Postres", "Snacks", "Bebidas", "Sopas")
+    val categories = baseCategories
     val difficulties = listOf("Fácil", "Media", "Difícil")
     val units = UnitConverter.allRecipeUnits
 
@@ -251,7 +265,15 @@ fun RecipeFormDialog(
                             text = stringResource(R.string.action_save),
                             onClick = {
                                 if (title.isNotBlank()) {
-                                    val cleanedIngredients = ingredients.filter { it.name.isNotBlank() && it.amount > 0 }
+                                    val cleanedIngredients = ingredients
+                                        .filter { it.name.isNotBlank() && it.amount > 0 }
+                                        .map {
+                                            it.copy(
+                                                name = it.name.trim(),
+                                                amount = SecurityUtils.clampNonNegative(it.amount),
+                                                manualUnitCost = SecurityUtils.clampNonNegative(it.manualUnitCost)
+                                            )
+                                        }
                                     val finalInstructions = if (instructionsMode == 1) {
                                         freeTextInstructions.split("\n")
                                             .map { it.trim() }
@@ -260,17 +282,25 @@ fun RecipeFormDialog(
                                         instructions.filter { it.isNotBlank() }
                                     }
 
+                                    val resolvedCategory = if (isCustomCategory) {
+                                        customCategoryText.trim().take(50)
+                                    } else {
+                                        category.trim().take(50)
+                                    }
+                                    val resolvedServings = (servingsText.trim().toIntOrNull() ?: 1).coerceIn(1, 500)
+                                    val resolvedPrepTime = (prepTimeText.trim().toIntOrNull() ?: 0).coerceIn(0, 1440)
+                                    val resolvedCookTime = (cookTimeText.trim().toIntOrNull() ?: 0).coerceIn(0, 1440)
                                     val newRecipe = (initialRecipe ?: Recipe()).copy(
                                         title = title.trim(),
-                                        category = category,
-                                        servings = servings.coerceAtLeast(1),
-                                        prepTimeMinutes = prepTime.coerceAtLeast(0),
-                                        cookTimeMinutes = cookTime.coerceAtLeast(0),
-                                        difficulty = difficulty,
+                                        category = resolvedCategory,
+                                        servings = resolvedServings,
+                                        prepTimeMinutes = resolvedPrepTime,
+                                        cookTimeMinutes = resolvedCookTime,
+                                        difficulty = difficulty.trim().take(30),
                                         ingredients = cleanedIngredients,
                                         instructions = finalInstructions,
                                         notes = notes.trim(),
-                                        imageUrl = imageUrl.trim()
+                                        imageUrl = SecurityUtils.sanitizeImageUri(imageUrl)
                                     )
                                     onSave(newRecipe)
                                     onDismiss()
@@ -693,14 +723,20 @@ fun RecipeFormDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = LocalizedLabels.recipeCategory(context, category),
+                            value = if (isCustomCategory) {
+                                stringResource(R.string.cat_custom)
+                            } else if (category.isNotBlank()) {
+                                LocalizedLabels.recipeCategory(context, category)
+                            } else "",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text(stringResource(R.string.recipe_form_cat_label)) },
+                            placeholder = { Text(stringResource(R.string.recipe_form_cat_select_hint)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded) },
                             modifier = Modifier
                                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .fillMaxWidth()
+                                .testTag("recipe_form_category_dropdown")
                         )
                         ExposedDropdownMenu(
                             expanded = catExpanded,
@@ -710,11 +746,19 @@ fun RecipeFormDialog(
                                 DropdownMenuItem(
                                     text = { Text(LocalizedLabels.recipeCategory(context, cat)) },
                                     onClick = {
+                                        isCustomCategory = false
                                         category = cat
                                         catExpanded = false
                                     }
                                 )
                             }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.cat_custom)) },
+                                onClick = {
+                                    isCustomCategory = true
+                                    catExpanded = false
+                                }
+                            )
                         }
                     }
 
@@ -725,14 +769,16 @@ fun RecipeFormDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         OutlinedTextField(
-                            value = LocalizedLabels.difficulty(context, difficulty),
+                            value = if (difficulty.isNotBlank()) LocalizedLabels.difficulty(context, difficulty) else "",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text(stringResource(R.string.recipe_form_diff_label)) },
+                            placeholder = { Text(stringResource(R.string.recipe_form_diff_select_hint)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = diffExpanded) },
                             modifier = Modifier
                                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                                 .fillMaxWidth()
+                                .testTag("recipe_form_difficulty_dropdown")
                         )
                         ExposedDropdownMenu(
                             expanded = diffExpanded,
@@ -751,14 +797,28 @@ fun RecipeFormDialog(
                     }
                 }
 
+                if (isCustomCategory) {
+                    OutlinedTextField(
+                        value = customCategoryText,
+                        onValueChange = { customCategoryText = it },
+                        label = { Text(stringResource(R.string.recipe_form_cat_custom_label)) },
+                        placeholder = { Text(stringResource(R.string.recipe_form_cat_custom_hint)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("recipe_form_custom_category"),
+                        singleLine = true
+                    )
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedTextField(
-                        value = servings.toString(),
-                        onValueChange = { servings = it.toIntOrNull() ?: 1 },
+                        value = servingsText,
+                        onValueChange = { raw -> servingsText = raw.filter { it.isDigit() } },
                         label = { Text(stringResource(R.string.recipe_form_servings_label)) },
+                        placeholder = { Text("1") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .weight(1f)
@@ -766,9 +826,10 @@ fun RecipeFormDialog(
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = prepTime.toString(),
-                        onValueChange = { prepTime = it.toIntOrNull() ?: 0 },
+                        value = prepTimeText,
+                        onValueChange = { raw -> prepTimeText = raw.filter { it.isDigit() } },
                         label = { Text(stringResource(R.string.recipe_form_prep_label)) },
+                        placeholder = { Text("0") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .weight(1f)
@@ -776,9 +837,10 @@ fun RecipeFormDialog(
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = cookTime.toString(),
-                        onValueChange = { cookTime = it.toIntOrNull() ?: 0 },
+                        value = cookTimeText,
+                        onValueChange = { raw -> cookTimeText = raw.filter { it.isDigit() } },
                         label = { Text(stringResource(R.string.recipe_form_cook_label)) },
+                        placeholder = { Text("0") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
                             .weight(1f)
@@ -789,13 +851,14 @@ fun RecipeFormDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                val headerServings = (servingsText.trim().toIntOrNull() ?: 1).coerceAtLeast(1)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.recipe_form_ingredients_header, servings),
+                        text = stringResource(R.string.recipe_form_ingredients_header, headerServings),
                         fontFamily = CaveatFontFamily,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
@@ -805,7 +868,7 @@ fun RecipeFormDialog(
                         icon = Icons.Default.Add,
                         onClick = {
                             ingredientRowKeys.add(nextRowKey++)
-                            ingredients.add(RecipeIngredient(name = "", amount = 100.0, unit = "g", category = "Despensa"))
+                            ingredients.add(RecipeIngredient(name = "", amount = 0.0, unit = "g", category = "Despensa"))
                         },
                         backgroundColor = PostItPeach,
                         fontSize = 17.sp,
@@ -832,7 +895,7 @@ fun RecipeFormDialog(
                         }
                         var showBatchHelper by remember { mutableStateOf(false) }
                         var batchPaidText by remember { mutableStateOf("") }
-                        var batchQtyText by remember { mutableStateOf("1") }
+                        var batchQtyText by remember { mutableStateOf("") }
                         var batchUnit by remember {
                             mutableStateOf(
                                 UnitConverter.compatibleUnitsFor(ingredient.unit).let { compat ->
@@ -845,7 +908,7 @@ fun RecipeFormDialog(
                         val matchedPantry = remember(pantryItems, ingredient.name) {
                             val clean = ingredient.name.trim()
                             if (clean.isEmpty()) null
-                            else pantryItems.find { it.name.trim().equals(clean, ignoreCase = true) }
+                            else pantryItems.find { SampleContentLocalizer.sameItemName(it.name, clean) }
                         }
                         val pantryRate = remember(matchedPantry, ingredient.unit) {
                             UnitConverter.unitCostInTargetUnit(matchedPantry, ingredient.unit)
@@ -903,7 +966,7 @@ fun RecipeFormDialog(
                                         value = amountText,
                                         onValueChange = { raw ->
                                             amountText = raw
-                                            val amt = UnitConverter.parseDecimal(raw) ?: 0.0
+                                            val amt = UnitConverter.parseNonNegativeDecimal(raw) ?: 0.0
                                             ingredients[index] = ingredient.copy(amount = amt)
                                         },
                                         label = { Text(stringResource(R.string.recipe_form_qty_label)) },
@@ -938,7 +1001,7 @@ fun RecipeFormDialog(
                                                 DropdownMenuItem(
                                                     text = { Text(LocalizedLabels.unit(context, u)) },
                                                     onClick = {
-                                                        val currentAmt = UnitConverter.parseDecimal(amountText) ?: ingredient.amount
+                                                        val currentAmt = UnitConverter.parseNonNegativeDecimal(amountText) ?: ingredient.amount
                                                         val convertedAmt = UnitConverter.convert(currentAmt, ingredient.unit, u)
                                                         val convertedManualCost = UnitConverter.convertCostPerUnit(
                                                             ingredient.manualUnitCost,
@@ -989,7 +1052,7 @@ fun RecipeFormDialog(
                                     value = manualCostText,
                                     onValueChange = { raw ->
                                         manualCostText = raw
-                                        val cost = UnitConverter.parseDecimal(raw) ?: 0.0
+                                        val cost = UnitConverter.parseNonNegativeDecimal(raw) ?: 0.0
                                         ingredients[index] = ingredient.copy(manualUnitCost = cost)
                                     },
                                     label = {
@@ -1042,8 +1105,8 @@ fun RecipeFormDialog(
                                 if (showBatchHelper) {
                                     val compatUnits = UnitConverter.compatibleUnitsFor(ingredient.unit)
                                     fun recalcFromBatch(paidStr: String, qtyStr: String, bUnit: String) {
-                                        val paid = UnitConverter.parseDecimal(paidStr) ?: 0.0
-                                        val qty = UnitConverter.parseDecimal(qtyStr) ?: 0.0
+                                        val paid = UnitConverter.parseNonNegativeDecimal(paidStr) ?: 0.0
+                                        val qty = UnitConverter.parseNonNegativeDecimal(qtyStr) ?: 0.0
                                         if (paid > 0.0 && qty > 0.0) {
                                             val breakdown = UnitConverter.computePantryCostBreakdown(
                                                 enteredPrice = paid,
@@ -1128,13 +1191,13 @@ fun RecipeFormDialog(
                 }
 
                 val recipeTotalEstimatedCost = ingredients.sumOf { ing ->
-                    val matched = pantryItems.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
+                    val matched = pantryItems.find { SampleContentLocalizer.sameItemName(it.name, ing.name) }
                     val pantryRate = UnitConverter.unitCostInTargetUnit(matched, ing.unit)
                     val rate = if (pantryRate > 0.0) pantryRate else ing.manualUnitCost
                     ing.amount * rate
                 }
                 if (recipeTotalEstimatedCost > 0.0) {
-                    val safeServings = servings.coerceAtLeast(1)
+                    val safeServings = (servingsText.trim().toIntOrNull() ?: 1).coerceAtLeast(1)
                     val perServing = recipeTotalEstimatedCost / safeServings
                     val suggestedPrice = AppSettingsPreferences.suggestedSellingPrice(recipeTotalEstimatedCost, marginPercent)
                     Surface(
@@ -1155,14 +1218,23 @@ fun RecipeFormDialog(
                                 color = MaterialTheme.colorScheme.secondary
                             )
                             Text(
-                                text = stringResource(
-                                    R.string.recipe_form_summary_line,
-                                    safeServings,
-                                    AppSettingsPreferences.formatMoney(recipeTotalEstimatedCost, currency),
-                                    AppSettingsPreferences.formatMoney(perServing, currency),
-                                    marginPercent,
-                                    AppSettingsPreferences.formatMoney(suggestedPrice, currency)
-                                ),
+                                text = if (marginPercent > 0) {
+                                    stringResource(
+                                        R.string.recipe_form_summary_line,
+                                        safeServings,
+                                        AppSettingsPreferences.formatMoney(recipeTotalEstimatedCost, currency),
+                                        AppSettingsPreferences.formatMoney(perServing, currency),
+                                        marginPercent,
+                                        AppSettingsPreferences.formatMoney(suggestedPrice, currency)
+                                    )
+                                } else {
+                                    stringResource(
+                                        R.string.recipe_form_summary_cost_only,
+                                        safeServings,
+                                        AppSettingsPreferences.formatMoney(recipeTotalEstimatedCost, currency),
+                                        AppSettingsPreferences.formatMoney(perServing, currency)
+                                    )
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = StockGreen
@@ -1438,14 +1510,12 @@ fun RecipeFormDialog(
                 Button(
                     onClick = {
                         val normalized = urlDraft.trim()
-                        if (normalized.startsWith("https://", ignoreCase = true) ||
-                            normalized.startsWith("http://", ignoreCase = true)
-                        ) {
+                        if (SecurityUtils.isSafeHttpsUrl(normalized)) {
                             onResetPhotoGenState()
                             imageUrl = normalized
                             showUrlPhotoDialog = false
                         } else {
-                            urlError = context.getString(R.string.recipe_form_url_hint)
+                            urlError = context.getString(R.string.url_https_only_error)
                         }
                     },
                     modifier = Modifier.testTag("recipe_form_url_apply")

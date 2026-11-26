@@ -28,6 +28,8 @@ import com.example.data.sync.GoogleDriveSyncRepository
 import com.example.settings.AppSettingsPreferences
 import com.example.settings.DriveSyncInfo
 import com.example.util.LocaleHelper
+import com.example.util.SampleContentLocalizer
+import com.example.util.SecurityUtils
 import com.example.util.UnitConverter
 import com.example.util.UpdateNotificationHelper
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -43,7 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -116,7 +118,16 @@ class MainViewModel(
     private val _updateCheckStatus = MutableStateFlow<String?>(null)
     val updateCheckStatus: StateFlow<String?> = _updateCheckStatus.asStateFlow()
 
+    private val _languageCode = MutableStateFlow(AppSettingsPreferences.getLanguageCode(repository.context))
+
     private var autoDriveSyncJob: Job? = null
+
+    fun refreshLanguage() {
+        _languageCode.value = AppSettingsPreferences.getLanguageCode(repository.context)
+        _selectedRecipe.value?.let { current ->
+            _selectedRecipe.value = SampleContentLocalizer.localizeRecipe(repository.context, current)
+        }
+    }
 
     fun generateRecipePhoto(
         title: String,
@@ -314,9 +325,13 @@ class MainViewModel(
         }
     }
 
-    // Data streams with two-tier Flow error unwrapping
-    val recipesState: StateFlow<UiState<List<Recipe>>> = repository.observeRecipes(currentUserId, isGuestMode)
-        .map<List<Recipe>, UiState<List<Recipe>>> { UiState.Success(it) }
+    // Data streams with two-tier Flow error unwrapping and dynamic sample localization
+    val recipesState: StateFlow<UiState<List<Recipe>>> = combine(
+        repository.observeRecipes(currentUserId, isGuestMode),
+        _languageCode
+    ) { list, _ ->
+        UiState.Success(list.map { SampleContentLocalizer.localizeRecipe(repository.context, it) }) as UiState<List<Recipe>>
+    }
         .catch { error ->
             val firestoreError = generateSequence(error) { it.cause }
                 .filterIsInstance<FirebaseFirestoreException>()
@@ -332,8 +347,12 @@ class MainViewModel(
             initialValue = UiState.Loading
         )
 
-    val pantryState: StateFlow<UiState<List<PantryItem>>> = repository.observePantry(currentUserId, isGuestMode)
-        .map<List<PantryItem>, UiState<List<PantryItem>>> { UiState.Success(it) }
+    val pantryState: StateFlow<UiState<List<PantryItem>>> = combine(
+        repository.observePantry(currentUserId, isGuestMode),
+        _languageCode
+    ) { list, _ ->
+        UiState.Success(list.map { SampleContentLocalizer.localizePantryItem(repository.context, it) }) as UiState<List<PantryItem>>
+    }
         .catch { error ->
             val firestoreError = generateSequence(error) { it.cause }
                 .filterIsInstance<FirebaseFirestoreException>()
@@ -349,8 +368,12 @@ class MainViewModel(
             initialValue = UiState.Loading
         )
 
-    val shoppingState: StateFlow<UiState<List<ShoppingItem>>> = repository.observeShoppingList(currentUserId, isGuestMode)
-        .map<List<ShoppingItem>, UiState<List<ShoppingItem>>> { UiState.Success(it) }
+    val shoppingState: StateFlow<UiState<List<ShoppingItem>>> = combine(
+        repository.observeShoppingList(currentUserId, isGuestMode),
+        _languageCode
+    ) { list, _ ->
+        UiState.Success(list.map { SampleContentLocalizer.localizeShoppingItem(repository.context, it) }) as UiState<List<ShoppingItem>>
+    }
         .catch { error ->
             val firestoreError = generateSequence(error) { it.cause }
                 .filterIsInstance<FirebaseFirestoreException>()
@@ -366,8 +389,12 @@ class MainViewModel(
             initialValue = UiState.Loading
         )
 
-    val productionLogsState: StateFlow<UiState<List<ProductionLog>>> = repository.observeProductionLogs(currentUserId, isGuestMode)
-        .map<List<ProductionLog>, UiState<List<ProductionLog>>> { UiState.Success(it) }
+    val productionLogsState: StateFlow<UiState<List<ProductionLog>>> = combine(
+        repository.observeProductionLogs(currentUserId, isGuestMode),
+        _languageCode
+    ) { list, _ ->
+        UiState.Success(list.map { SampleContentLocalizer.localizeProductionLog(repository.context, it) }) as UiState<List<ProductionLog>>
+    }
         .catch { error ->
             val firestoreError = generateSequence(error) { it.cause }
                 .filterIsInstance<FirebaseFirestoreException>()
@@ -398,9 +425,9 @@ class MainViewModel(
     val targetServings = MutableStateFlow(4)
 
     fun selectRecipe(recipe: Recipe?) {
-        _selectedRecipe.value = recipe
+        _selectedRecipe.value = recipe?.let { SampleContentLocalizer.localizeRecipe(repository.context, it) }
         if (recipe != null) {
-            targetServings.value = recipe.servings
+            targetServings.value = recipe.servings.coerceIn(1, 500)
         }
     }
 
@@ -645,15 +672,17 @@ class MainViewModel(
     ) {
         viewModelScope.launch {
             try {
+                val safeScaleFactor = SecurityUtils.clampPositive(scaleFactor, min = 0.0001, max = 10_000.0, fallback = 1.0)
+                val safeTargetServings = targetServings.coerceIn(1, 10_000)
                 var deductedCount = 0
                 var batchTotalCost = 0.0
 
                 for (ing in recipe.ingredients) {
-                    val needed = ing.amount * scaleFactor
-                    val match = currentPantry.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
+                    val needed = SecurityUtils.clampNonNegative(ing.amount * safeScaleFactor)
+                    val match = currentPantry.find { SampleContentLocalizer.sameItemName(it.name, ing.name) }
 
                     val pantryUnitCost = UnitConverter.unitCostInTargetUnit(match, ing.unit)
-                    val unitCost = if (pantryUnitCost > 0.0) pantryUnitCost else ing.manualUnitCost
+                    val unitCost = if (pantryUnitCost > 0.0) pantryUnitCost else SecurityUtils.clampNonNegative(ing.manualUnitCost)
                     batchTotalCost += needed * unitCost
 
                     if (match != null) {
@@ -664,18 +693,22 @@ class MainViewModel(
                     }
                 }
 
+                val safeBatchTotalCost = SecurityUtils.clampNonNegative(batchTotalCost, SecurityUtils.MAX_PRODUCTION_CURRENCY_VALUE)
                 val currency = AppSettingsPreferences.getCurrency(repository.context)
-                val marginPercent = AppSettingsPreferences.getMarginPercent(repository.context)
-                val suggestedPrice = AppSettingsPreferences.suggestedSellingPrice(batchTotalCost, marginPercent)
+                val marginPercent = SecurityUtils.clampMarginPercent(AppSettingsPreferences.getMarginPercent(repository.context))
+                val suggestedPrice = SecurityUtils.clampNonNegative(
+                    AppSettingsPreferences.suggestedSellingPrice(safeBatchTotalCost, marginPercent),
+                    SecurityUtils.MAX_PRODUCTION_CURRENCY_VALUE
+                )
 
                 repository.recordProductionLog(
                     userId = currentUserId,
                     log = ProductionLog(
                         recipeId = recipe.id,
                         recipeTitle = recipe.title,
-                        targetServings = targetServings,
-                        scaleFactor = scaleFactor,
-                        totalCost = batchTotalCost,
+                        targetServings = safeTargetServings,
+                        scaleFactor = safeScaleFactor,
+                        totalCost = safeBatchTotalCost,
                         currencyCode = currency.code,
                         marginPercent = marginPercent,
                         suggestedPrice = suggestedPrice,
@@ -702,11 +735,12 @@ class MainViewModel(
     ) {
         viewModelScope.launch {
             try {
+                val safeScale = SecurityUtils.clampPositive(scaleFactor, min = 0.0001, max = 10_000.0, fallback = 1.0)
                 var addedCount = 0
                 for (ingredient in recipe.ingredients) {
-                    val neededAmount = Math.round(ingredient.amount * scaleFactor * 1000.0) / 1000.0
+                    val neededAmount = Math.round(SecurityUtils.clampNonNegative(ingredient.amount) * safeScale * 1000.0) / 1000.0
                     val matching = currentPantry.find {
-                        it.name.trim().equals(ingredient.name.trim(), ignoreCase = true)
+                        SampleContentLocalizer.sameItemName(it.name, ingredient.name)
                     }
                     val available = UnitConverter.availableInTargetUnit(matching, ingredient.unit)
 
@@ -748,7 +782,7 @@ class MainViewModel(
 
             for (ing in recipe.ingredients) {
                 val inPantry = pantry.find {
-                    it.name.trim().equals(ing.name.trim(), ignoreCase = true)
+                    SampleContentLocalizer.sameItemName(it.name, ing.name)
                 }
                 val hasQty = UnitConverter.availableInTargetUnit(inPantry, ing.unit)
                 if (hasQty + 0.0001 >= ing.amount) {
@@ -798,7 +832,7 @@ class MainViewModel(
                         shopping = payload.shopping,
                         productionLogs = payload.productionLogs,
                         currencyCode = payload.currencyCode ?: "USD",
-                        marginPercent = payload.marginPercent ?: 30
+                        marginPercent = payload.marginPercent ?: 0
                     )
                     onResult(json)
                     _userMessage.emit(str(R.string.vm_backup_exported, payload.recipes.size, payload.pantry.size))

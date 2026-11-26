@@ -15,6 +15,7 @@ import com.example.data.repository.CookingRepository
 import com.example.settings.AppSettingsPreferences
 import com.example.util.LocaleHelper
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
@@ -316,8 +317,12 @@ class RecetarioAppFunctions {
         else -> word
     }
 
-    private fun matchesFlexibleQuery(candidateRaw: String, queryNorm: String): Boolean {
+    private fun matchesFlexibleQuery(candidateRaw: String, queryRaw: String): Boolean {
+        val queryNorm = normalizeText(queryRaw)
         if (queryNorm.isBlank()) return true
+        if (SampleContentLocalizer.sameItemName(candidateRaw, queryRaw) ||
+            SampleContentLocalizer.sameRecipeTitle(candidateRaw, queryRaw)
+        ) return true
         val candidateNorm = normalizeText(candidateRaw)
         if (candidateNorm.contains(queryNorm) || queryNorm.contains(candidateNorm)) return true
         val qStem = stemSpanishEnglish(queryNorm)
@@ -338,14 +343,18 @@ class RecetarioAppFunctions {
     ): PantrySummaryResult = withContext(Dispatchers.IO) {
         val loc = LocaleHelper.localizedContext(appFunctionContext.context)
         val source = resolveActiveSource(appFunctionContext)
-        val allItems = loadPantryItemsForSource(appFunctionContext, source)
+        val allItems = loadPantryItemsForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizePantryItem(loc, it)
+        }
         val rawQuery = nombreIngrediente.orEmpty().trim()
         val query = normalizeText(rawQuery)
         val matched = if (query.isBlank()) {
             allItems
         } else {
             allItems.filter {
-                matchesFlexibleQuery(it.name, query) || matchesFlexibleQuery(it.category, query)
+                matchesFlexibleQuery(it.name, rawQuery) ||
+                    matchesFlexibleQuery(LocalizedLabels.pantryCategory(loc, it.category), rawQuery) ||
+                    matchesFlexibleQuery(it.category, rawQuery)
             }
         }
 
@@ -398,7 +407,9 @@ class RecetarioAppFunctions {
     ): PantrySummaryResult = withContext(Dispatchers.IO) {
         val loc = LocaleHelper.localizedContext(appFunctionContext.context)
         val source = resolveActiveSource(appFunctionContext)
-        val allItems = loadPantryItemsForSource(appFunctionContext, source)
+        val allItems = loadPantryItemsForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizePantryItem(loc, it)
+        }
         val alerts = allItems.filter { it.isOutOfStock || it.isLowStock }
         val lowCount = alerts.count { it.isLowStock }
         val outCount = alerts.count { it.isOutOfStock }
@@ -441,13 +452,16 @@ class RecetarioAppFunctions {
             throw AppFunctionInvalidArgumentException(loc.getString(R.string.af_recipe_empty_arg))
         }
         val source = resolveActiveSource(appFunctionContext)
-        val recipes = loadRecipesForSource(appFunctionContext, source)
-        val query = normalizeText(nombreReceta)
+        val recipes = loadRecipesForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizeRecipe(loc, it)
+        }
         val recipe = recipes.firstOrNull {
-            matchesFlexibleQuery(it.title, query)
+            matchesFlexibleQuery(it.title, nombreReceta)
         } ?: throw AppFunctionElementNotFoundException(loc.getString(R.string.af_recipe_not_found, nombreReceta))
 
-        val pantry = loadPantryItemsForSource(appFunctionContext, source)
+        val pantry = loadPantryItemsForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizePantryItem(loc, it)
+        }
         val target = if (porcionesDeseadas > 0) porcionesDeseadas else recipe.servings.coerceAtLeast(1)
         val scale = target.toDouble() / recipe.servings.coerceAtLeast(1)
 
@@ -456,7 +470,7 @@ class RecetarioAppFunctions {
         for (ing in recipe.ingredients) {
             val needed = ing.amount * scale
             val pantryMatch = pantry.firstOrNull {
-                normalizeText(it.name) == normalizeText(ing.name)
+                SampleContentLocalizer.sameItemName(it.name, ing.name)
             }
             val stockInRecipeUnit = UnitConverter.availableInTargetUnit(pantryMatch, ing.unit)
             if (stockInRecipeUnit + 0.001 < needed) {
@@ -506,7 +520,9 @@ class RecetarioAppFunctions {
     ): ShoppingSummaryResult = withContext(Dispatchers.IO) {
         val loc = LocaleHelper.localizedContext(appFunctionContext.context)
         val source = resolveActiveSource(appFunctionContext)
-        val allShopping = loadShoppingItemsForSource(appFunctionContext, source)
+        val allShopping = loadShoppingItemsForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizeShoppingItem(loc, it)
+        }
         val pendingCount = allShopping.count { !it.isPurchased }
         val filtered = if (soloPendientes) allShopping.filter { !it.isPurchased } else allShopping
         val sLabel = sourceLabel(loc, source)
@@ -551,8 +567,12 @@ class RecetarioAppFunctions {
     ): AvailableRecipesResult = withContext(Dispatchers.IO) {
         val loc = LocaleHelper.localizedContext(appFunctionContext.context)
         val source = resolveActiveSource(appFunctionContext)
-        val allRecipes = loadRecipesForSource(appFunctionContext, source)
-        val pantry = loadPantryItemsForSource(appFunctionContext, source)
+        val allRecipes = loadRecipesForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizeRecipe(loc, it)
+        }
+        val pantry = loadPantryItemsForSource(appFunctionContext, source).map {
+            SampleContentLocalizer.localizePantryItem(loc, it)
+        }
 
         val catQuery = normalizeText(categoria.orEmpty())
         val scopedRecipes = if (catQuery.isBlank() || catQuery == "todas" || catQuery == "all" || catQuery == "toutes") {
@@ -569,7 +589,7 @@ class RecetarioAppFunctions {
             var available = 0
             val missing = mutableListOf<String>()
             for (ing in recipe.ingredients) {
-                val match = pantry.firstOrNull { normalizeText(it.name) == normalizeText(ing.name) }
+                val match = pantry.firstOrNull { SampleContentLocalizer.sameItemName(it.name, ing.name) }
                 val hasQty = UnitConverter.availableInTargetUnit(match, ing.unit)
                 if (hasQty + 0.0001 >= ing.amount) {
                     available++

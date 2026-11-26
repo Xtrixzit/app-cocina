@@ -72,6 +72,7 @@ import com.example.ui.theme.PostItPink
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,7 +86,7 @@ fun ShoppingListScreen(
     val shoppingUiState by viewModel.shoppingState.collectAsState()
 
     var newItemName by remember { mutableStateOf("") }
-    var newItemQty by remember { mutableStateOf("1") }
+    var newItemQty by remember { mutableStateOf("") }
     var newItemUnit by remember { mutableStateOf("unidades") }
     var markAsAvailable by remember { mutableStateOf(true) }
     var unitMenuExpanded by remember { mutableStateOf(false) }
@@ -96,17 +97,17 @@ fun ShoppingListScreen(
 
     val onAddItem = {
         if (newItemName.isNotBlank()) {
-            val qty = UnitConverter.parseDecimal(newItemQty) ?: 1.0
+            val qty = UnitConverter.parseNonNegativeDecimal(newItemQty) ?: 0.0
             viewModel.saveShoppingItem(
                 ShoppingItem(
                     name = newItemName.trim(),
-                    quantity = qty.coerceAtLeast(0.0),
+                    quantity = qty,
                     unit = newItemUnit.trim(),
                     isPurchased = markAsAvailable
                 )
             )
             newItemName = ""
-            newItemQty = "1"
+            newItemQty = ""
         }
     }
 
@@ -174,7 +175,7 @@ fun ShoppingListScreen(
                             value = newItemQty,
                             onValueChange = { newItemQty = it },
                             label = { Text(stringResource(R.string.shopping_qty_label)) },
-                            placeholder = { Text("1") },
+                            placeholder = { Text("0") },
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Decimal,
                                 imeAction = ImeAction.Done
@@ -372,12 +373,12 @@ fun ShoppingListScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             val totalEstCost = allItems.sumOf { item ->
-                                val match = pantryItems.find { it.name.trim().equals(item.name.trim(), ignoreCase = true) }
+                                val match = pantryItems.find { SampleContentLocalizer.sameItemName(it.name, item.name) }
                                 val rate = UnitConverter.unitCostInTargetUnit(match, item.unit)
                                 if (rate > 0.0) rate * item.quantity else 0.0
                             }
                             val pendingEstCost = pendingItems.sumOf { item ->
-                                val match = pantryItems.find { it.name.trim().equals(item.name.trim(), ignoreCase = true) }
+                                val match = pantryItems.find { SampleContentLocalizer.sameItemName(it.name, item.name) }
                                 val rate = UnitConverter.unitCostInTargetUnit(match, item.unit)
                                 if (rate > 0.0) rate * item.quantity else 0.0
                             }
@@ -428,7 +429,7 @@ fun ShoppingListScreen(
 
                             items(activeList, key = { it.id }) { item ->
                                 val matchingPantry = pantryItems.find {
-                                    it.name.trim().equals(item.name.trim(), ignoreCase = true)
+                                    SampleContentLocalizer.sameItemName(it.name, item.name)
                                 }
                                 ShoppingItemCard(
                                     item = item,

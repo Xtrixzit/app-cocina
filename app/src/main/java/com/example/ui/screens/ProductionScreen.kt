@@ -97,6 +97,7 @@ import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -132,10 +133,20 @@ fun ProductionScreen(
         mutableStateOf(selectedRecipe?.ingredients?.firstOrNull()?.unit ?: "g")
     }
     var batchMultiplierText by remember { mutableStateOf("1") }
+    var marginInputText by remember(marginPercent) {
+        mutableStateOf(if (marginPercent > 0) marginPercent.toString() else "")
+    }
 
     var showDeductConfirmDialog by remember { mutableStateOf(false) }
 
-    val categories = listOf("Todas", "Desayunos", "Almuerzos", "Cenas", "Postres", "Snacks", "Bebidas", "Sopas")
+    val baseCategories = listOf("Todas", "Desayunos", "Almuerzos", "Comidas", "Cenas", "Pan", "Postres", "Snacks", "Bebidas", "Sopas")
+    val customCategories = remember(recipes) {
+        recipes
+            .map { it.category.trim() }
+            .filter { cat -> cat.isNotBlank() && baseCategories.none { it.equals(cat, ignoreCase = true) } }
+            .distinctBy { it.lowercase() }
+    }
+    val categories = baseCategories + customCategories
 
     BackHandler(enabled = selectedRecipe != null) {
         selectedRecipe = null
@@ -314,12 +325,16 @@ fun ProductionScreen(
                                                 color = MaterialTheme.colorScheme.secondary
                                             )
                                             Text(
-                                                text = stringResource(
-                                                    R.string.prod_recipe_meta,
-                                                    LocalizedLabels.recipeCategory(context, recipe.category),
-                                                    recipe.servings,
-                                                    recipe.ingredients.size
-                                                ),
+                                                text = if (recipe.category.isNotBlank()) {
+                                                    stringResource(
+                                                        R.string.prod_recipe_meta,
+                                                        LocalizedLabels.recipeCategory(context, recipe.category),
+                                                        recipe.servings,
+                                                        recipe.ingredients.size
+                                                    )
+                                                } else {
+                                                    "${stringResource(R.string.recipe_card_servings, recipe.servings)} • ${stringResource(R.string.recipe_card_ingredients, recipe.ingredients.size)}"
+                                                },
                                                 fontFamily = PatrickHandFontFamily,
                                                 fontSize = 14.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -402,12 +417,23 @@ fun ProductionScreen(
                                                 color = MaterialTheme.colorScheme.secondary
                                             )
                                             Text(
-                                                text = stringResource(
-                                                    R.string.prod_history_row,
-                                                    log.targetServings,
-                                                    totalCostFmt,
-                                                    suggestedFmt
-                                                ),
+                                                text = when {
+                                                    log.totalCost <= 0.0 -> stringResource(
+                                                        R.string.prod_history_empty_cost_row,
+                                                        log.targetServings
+                                                    )
+                                                    log.marginPercent <= 0 -> stringResource(
+                                                        R.string.prod_history_cost_only_row,
+                                                        log.targetServings,
+                                                        totalCostFmt
+                                                    )
+                                                    else -> stringResource(
+                                                        R.string.prod_history_row,
+                                                        log.targetServings,
+                                                        totalCostFmt,
+                                                        suggestedFmt
+                                                    )
+                                                },
                                                 fontFamily = PatrickHandFontFamily,
                                                 fontSize = 14.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -436,7 +462,7 @@ fun ProductionScreen(
                     }
                     1 -> {
                         val ing = recipe.ingredients.getOrNull(selectedIngredientIndex)
-                        val rawAvail = UnitConverter.parseDecimal(ingredientAvailableAmountText) ?: 0.0
+                        val rawAvail = UnitConverter.parseNonNegativeDecimal(ingredientAvailableAmountText) ?: 0.0
                         val availInRecipeUnit = if (ing != null && rawAvail > 0.0) {
                             UnitConverter.convert(rawAvail, selectedIngredientInputUnit, ing.unit) ?: rawAvail
                         } else 0.0
@@ -444,7 +470,7 @@ fun ProductionScreen(
                             availInRecipeUnit / ing.amount
                         } else 1.0
                     }
-                    2 -> (UnitConverter.parseDecimal(batchMultiplierText) ?: 1.0).coerceAtLeast(0.1)
+                    2 -> (UnitConverter.parseNonNegativeDecimal(batchMultiplierText) ?: 1.0).coerceAtLeast(0.1)
                     else -> 1.0
                 }
 
@@ -467,7 +493,7 @@ fun ProductionScreen(
 
                 val productionRows = recipe.ingredients.map { ing ->
                     val required = Math.round(ing.amount * scaleFactor * 1000.0) / 1000.0
-                    val pantryItem = pantryItems.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
+                    val pantryItem = pantryItems.find { SampleContentLocalizer.sameItemName(it.name, ing.name) }
                     val stockConverted = UnitConverter.availableInTargetUnit(pantryItem, ing.unit)
                     val shortage = (required - stockConverted).coerceAtLeast(0.0)
 
@@ -738,7 +764,7 @@ fun ProductionScreen(
                                         val currentIng = recipe.ingredients.getOrNull(selectedIngredientIndex)
                                         val currentIngUnitLabel = LocalizedLabels.unit(context, selectedIngredientInputUnit)
                                         val compatKeyUnits = currentIng?.let { UnitConverter.compatibleUnitsFor(it.unit) } ?: listOf("g")
-                                        val rawAvail = UnitConverter.parseDecimal(ingredientAvailableAmountText) ?: 0.0
+                                        val rawAvail = UnitConverter.parseNonNegativeDecimal(ingredientAvailableAmountText) ?: 0.0
                                         val convertedAvail = if (currentIng != null && rawAvail > 0.0) {
                                             UnitConverter.convert(rawAvail, selectedIngredientInputUnit, currentIng.unit)
                                         } else null
@@ -826,7 +852,7 @@ fun ProductionScreen(
                                                             DropdownMenuItem(
                                                                 text = { Text(LocalizedLabels.unit(context, cu)) },
                                                                 onClick = {
-                                                                    val parsedNow = UnitConverter.parseDecimal(ingredientAvailableAmountText)
+                                                                    val parsedNow = UnitConverter.parseNonNegativeDecimal(ingredientAvailableAmountText)
                                                                     val convertedNow = parsedNow?.let {
                                                                         UnitConverter.convert(it, selectedIngredientInputUnit, cu)
                                                                     }
@@ -874,7 +900,7 @@ fun ProductionScreen(
                                         }
                                     }
                                     2 -> {
-                                        val currentBatchVal = (UnitConverter.parseDecimal(batchMultiplierText) ?: 1.0).coerceAtLeast(0.1)
+                                        val currentBatchVal = (UnitConverter.parseNonNegativeDecimal(batchMultiplierText) ?: 1.0).coerceAtLeast(0.1)
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
@@ -963,58 +989,75 @@ fun ProductionScreen(
                                             fontSize = 15.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        Text(
-                                            text = AppSettingsPreferences.formatMoney(totalProductionCost, currency),
-                                            fontFamily = CaveatFontFamily,
-                                            fontSize = 28.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        if (costPerUnit > 0.0) {
-                                            Text(
-                                                text = stringResource(
-                                                    R.string.prod_cost_per_portion,
-                                                    AppSettingsPreferences.formatMoney(costPerUnit, currency)
-                                                ),
-                                                fontFamily = PatrickHandFontFamily,
-                                                fontSize = 14.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
                                         if (totalProductionCost > 0.0) {
                                             Text(
-                                                text = stringResource(
-                                                    R.string.prod_suggested_price_line,
-                                                    marginPercent,
-                                                    AppSettingsPreferences.formatMoney(suggestedSalePrice, currency),
-                                                    AppSettingsPreferences.formatMoney(estimatedProfit, currency)
-                                                ),
-                                                fontFamily = PatrickHandFontFamily,
-                                                fontSize = 14.sp,
+                                                text = AppSettingsPreferences.formatMoney(totalProductionCost, currency),
+                                                fontFamily = CaveatFontFamily,
+                                                fontSize = 28.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = StockGreen
+                                                color = MaterialTheme.colorScheme.primary
                                             )
-                                            if (suggestedSalePerPortion > 0.0) {
+                                            if (costPerUnit > 0.0) {
                                                 Text(
                                                     text = stringResource(
-                                                        R.string.prod_suggested_per_portion,
+                                                        R.string.prod_cost_per_portion,
+                                                        AppSettingsPreferences.formatMoney(costPerUnit, currency)
+                                                    ),
+                                                    fontFamily = PatrickHandFontFamily,
+                                                    fontSize = 14.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            if (marginPercent > 0) {
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.prod_suggested_price_line,
                                                         marginPercent,
-                                                        AppSettingsPreferences.formatMoney(suggestedSalePerPortion, currency)
+                                                        AppSettingsPreferences.formatMoney(suggestedSalePrice, currency),
+                                                        AppSettingsPreferences.formatMoney(estimatedProfit, currency)
                                                     ),
                                                     fontFamily = PatrickHandFontFamily,
                                                     fontSize = 14.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
+                                                    color = StockGreen
+                                                )
+                                                if (suggestedSalePerPortion > 0.0) {
+                                                    Text(
+                                                        text = stringResource(
+                                                            R.string.prod_suggested_per_portion,
+                                                            marginPercent,
+                                                            AppSettingsPreferences.formatMoney(suggestedSalePerPortion, currency)
+                                                        ),
+                                                        fontFamily = PatrickHandFontFamily,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            } else {
+                                                Text(
+                                                    text = stringResource(R.string.prod_no_margin_entered),
+                                                    fontFamily = PatrickHandFontFamily,
+                                                    fontSize = 13.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                             if (totalKg >= 0.01) {
                                                 Text(
-                                                    text = stringResource(
-                                                        R.string.prod_weight_output_line,
-                                                        "${UnitConverter.formatQuantity(totalKg)} kg",
-                                                        AppSettingsPreferences.formatMoney(totalProductionCost / totalKg, currency),
-                                                        AppSettingsPreferences.formatMoney(suggestedSalePrice / totalKg, currency)
-                                                    ),
+                                                    text = if (marginPercent > 0) {
+                                                        stringResource(
+                                                            R.string.prod_weight_output_line,
+                                                            "${UnitConverter.formatQuantity(totalKg)} kg",
+                                                            AppSettingsPreferences.formatMoney(totalProductionCost / totalKg, currency),
+                                                            AppSettingsPreferences.formatMoney(suggestedSalePrice / totalKg, currency)
+                                                        )
+                                                    } else {
+                                                        stringResource(
+                                                            R.string.prod_weight_cost_only_line,
+                                                            "${UnitConverter.formatQuantity(totalKg)} kg",
+                                                            AppSettingsPreferences.formatMoney(totalProductionCost / totalKg, currency)
+                                                        )
+                                                    },
                                                     fontFamily = PatrickHandFontFamily,
                                                     fontSize = 13.sp,
                                                     color = MaterialTheme.colorScheme.secondary
@@ -1022,17 +1065,33 @@ fun ProductionScreen(
                                             }
                                             if (totalLiters >= 0.01) {
                                                 Text(
-                                                    text = stringResource(
-                                                        R.string.prod_volume_output_line,
-                                                        "${UnitConverter.formatQuantity(totalLiters)} L",
-                                                        AppSettingsPreferences.formatMoney(totalProductionCost / totalLiters, currency),
-                                                        AppSettingsPreferences.formatMoney(suggestedSalePrice / totalLiters, currency)
-                                                    ),
+                                                    text = if (marginPercent > 0) {
+                                                        stringResource(
+                                                            R.string.prod_volume_output_line,
+                                                            "${UnitConverter.formatQuantity(totalLiters)} L",
+                                                            AppSettingsPreferences.formatMoney(totalProductionCost / totalLiters, currency),
+                                                            AppSettingsPreferences.formatMoney(suggestedSalePrice / totalLiters, currency)
+                                                        )
+                                                    } else {
+                                                        stringResource(
+                                                            R.string.prod_volume_cost_only_line,
+                                                            "${UnitConverter.formatQuantity(totalLiters)} L",
+                                                            AppSettingsPreferences.formatMoney(totalProductionCost / totalLiters, currency)
+                                                        )
+                                                    },
                                                     fontFamily = PatrickHandFontFamily,
                                                     fontSize = 13.sp,
                                                     color = MaterialTheme.colorScheme.secondary
                                                 )
                                             }
+                                        } else {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = stringResource(R.string.prod_no_costs_entered),
+                                                fontFamily = PatrickHandFontFamily,
+                                                fontSize = 14.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
 
@@ -1065,6 +1124,24 @@ fun ProductionScreen(
                                         }
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                OutlinedTextField(
+                                    value = marginInputText,
+                                    onValueChange = { raw ->
+                                        val digits = raw.filter { it.isDigit() }
+                                        marginInputText = digits
+                                        AppSettingsPreferences.setMarginPercent(context, digits.toIntOrNull() ?: 0)
+                                    },
+                                    label = { Text(stringResource(R.string.prod_margin_inline_label)) },
+                                    placeholder = { Text(stringResource(R.string.prod_margin_inline_hint)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("production_margin_input")
+                                )
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -1160,7 +1237,10 @@ fun ProductionScreen(
                                         textBuilder.append("• ${row.ingredient.name}: $reqStr $unitLabel$statusStr\n")
                                     }
                                     if (totalProductionCost > 0.0) {
-                                        textBuilder.append("\n$shareCostLine\n$sharePriceLine")
+                                        textBuilder.append("\n$shareCostLine")
+                                        if (marginPercent > 0) {
+                                            textBuilder.append("\n$sharePriceLine")
+                                        }
                                     }
 
                                     val sendIntent = Intent().apply {

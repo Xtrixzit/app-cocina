@@ -44,7 +44,8 @@ object InventorySyncManager {
         sb.append("📋 *${loc.getString(R.string.pantry_header)} - ${loc.getString(R.string.app_name)}*\n")
         sb.append("${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}\n\n")
 
-        val grouped = items.groupBy { it.category }
+        val localizedItems = items.map { com.example.util.SampleContentLocalizer.localizePantryItem(loc, it) }
+        val grouped = localizedItems.groupBy { it.category }
         for ((category, catItems) in grouped) {
             val catDisp = LocalizedLabels.pantryCategory(loc, category)
             sb.append("🔹 *${catDisp.uppercase()}*\n")
@@ -58,7 +59,7 @@ object InventorySyncManager {
 
         sb.append("---\n")
         sb.append("${loc.getString(R.string.sync_copy_token_btn)}:\n")
-        sb.append(createSyncToken(items))
+        sb.append(createSyncToken(localizedItems))
         return sb.toString()
     }
 
@@ -85,15 +86,17 @@ object InventorySyncManager {
             val result = mutableListOf<PantryItem>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
+                val itemName = obj.getString("name").trim().take(100)
+                if (itemName.isBlank()) continue
                 result.add(
                     PantryItem(
                         id = "imported_${java.util.UUID.randomUUID().toString().take(8)}",
-                        name = obj.getString("name"),
-                        category = obj.optString("category", "Despensa"),
-                        quantity = obj.optDouble("quantity", 0.0),
-                        unit = obj.optString("unit", "g"),
-                        minQuantity = obj.optDouble("minQuantity", 0.0),
-                        expirationDate = obj.optString("expirationDate", "")
+                        name = itemName,
+                        category = obj.optString("category", "Despensa").trim().ifBlank { "Despensa" }.take(50),
+                        quantity = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("quantity", 0.0)),
+                        unit = obj.optString("unit", "g").trim().ifBlank { "g" }.take(30),
+                        minQuantity = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("minQuantity", 0.0)),
+                        expirationDate = obj.optString("expirationDate", "").trim().take(50)
                     )
                 )
             }

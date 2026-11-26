@@ -238,6 +238,19 @@ object UnitConverter {
     }
 
     /**
+     * Parses numeric user input requiring a finite, non-negative value capped at [max].
+     * Negative values, NaN, and Infinity return null.
+     */
+    fun parseNonNegativeDecimal(
+        raw: String,
+        max: Double = SecurityUtils.MAX_NUMERIC_VALUE
+    ): Double? {
+        val parsed = parseDecimal(raw) ?: return null
+        if (!parsed.isFinite() || parsed < 0.0) return null
+        return parsed.coerceAtMost(max)
+    }
+
+    /**
      * Formats quantities cleanly without losing sub-unit precision (e.g. 1.25 kg instead of 1.3 kg).
      */
     fun formatQuantity(value: Double, maxDecimals: Int = 3): String {

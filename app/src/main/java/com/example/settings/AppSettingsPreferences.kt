@@ -81,16 +81,18 @@ object AppSettingsPreferences {
     private const val KEY_DRIVE_MD_LINK = "drive_md_link"
     private const val KEY_DRIVE_EMAIL = "drive_linked_email"
     private const val KEY_GUIDED_TUTORIAL_DONE = "guided_tutorial_completed"
+    private const val KEY_HAS_LOGGED_IN_BEFORE = "has_logged_in_before"
     private const val KEY_GITHUB_REPO = "github_update_repo"
     private const val KEY_LAST_NOTIFIED_UPDATE_VERSION = "last_notified_update_version"
 
     private val _currencyFlow = MutableStateFlow(CurrencyOption.USD)
-    private val _marginFlow = MutableStateFlow(30)
+    private val _marginFlow = MutableStateFlow(0)
     private val _languageFlow = MutableStateFlow(AppLanguage.SYSTEM)
     private val _licenseKeyFlow = MutableStateFlow("")
     private val _timerFlow = MutableStateFlow(PersistedTimerState())
     private val _driveSyncFlow = MutableStateFlow(DriveSyncInfo())
     private val _guidedTutorialCompletedFlow = MutableStateFlow(false)
+    private val _hasLoggedInBeforeFlow = MutableStateFlow(false)
     private val _githubRepoFlow = MutableStateFlow("")
 
     @Volatile
@@ -105,12 +107,13 @@ object AppSettingsPreferences {
                 if (!initialized) {
                     val p = prefs(context)
                     _currencyFlow.value = CurrencyOption.fromCode(p.getString(KEY_CURRENCY, CurrencyOption.USD.code))
-                    _marginFlow.value = p.getInt(KEY_MARGIN, 30).coerceIn(0, 500)
+                    _marginFlow.value = p.getInt(KEY_MARGIN, 0).coerceIn(0, 500)
                     _languageFlow.value = AppLanguage.fromCode(p.getString(KEY_LANGUAGE, ""))
                     _licenseKeyFlow.value = p.getString(KEY_LICENSE_KEY, "") ?: ""
                     _timerFlow.value = readTimerState(p)
                     _driveSyncFlow.value = readDriveSyncInfo(p)
                     _guidedTutorialCompletedFlow.value = p.getBoolean(KEY_GUIDED_TUTORIAL_DONE, false)
+                    _hasLoggedInBeforeFlow.value = p.getBoolean(KEY_HAS_LOGGED_IN_BEFORE, false)
                     _githubRepoFlow.value = p.getString(KEY_GITHUB_REPO, "") ?: ""
                     initialized = true
                 }
@@ -287,6 +290,22 @@ object AppSettingsPreferences {
         ensureLoaded(context)
         prefs(context).edit().putBoolean(KEY_GUIDED_TUTORIAL_DONE, completed).commit()
         _guidedTutorialCompletedFlow.value = completed
+    }
+
+    fun observeHasLoggedInBefore(context: Context): StateFlow<Boolean> {
+        ensureLoaded(context)
+        return _hasLoggedInBeforeFlow.asStateFlow()
+    }
+
+    fun hasLoggedInBefore(context: Context): Boolean {
+        ensureLoaded(context)
+        return _hasLoggedInBeforeFlow.value
+    }
+
+    fun setHasLoggedInBefore(context: Context, loggedInBefore: Boolean) {
+        ensureLoaded(context)
+        prefs(context).edit().putBoolean(KEY_HAS_LOGGED_IN_BEFORE, loggedInBefore).commit()
+        _hasLoggedInBeforeFlow.value = loggedInBefore
     }
 
     fun observeGithubRepo(context: Context): StateFlow<String> {

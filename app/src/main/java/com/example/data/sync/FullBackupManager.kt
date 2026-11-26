@@ -136,32 +136,32 @@ object FullBackupManager {
                     val ingObj = ingArr.getJSONObject(j)
                     ingredients.add(
                         RecipeIngredient(
-                            name = ingObj.optString("name", ""),
-                            amount = ingObj.optDouble("amount", 0.0),
-                            unit = ingObj.optString("unit", "g"),
-                            category = ingObj.optString("category", "Despensa"),
-                            manualUnitCost = ingObj.optDouble("manualUnitCost", 0.0)
+                            name = ingObj.optString("name", "").trim().take(100),
+                            amount = com.example.util.SecurityUtils.clampNonNegative(ingObj.optDouble("amount", 0.0)),
+                            unit = ingObj.optString("unit", "g").trim().ifBlank { "g" }.take(30),
+                            category = ingObj.optString("category", "Despensa").trim().ifBlank { "Despensa" }.take(50),
+                            manualUnitCost = com.example.util.SecurityUtils.clampNonNegative(ingObj.optDouble("manualUnitCost", 0.0))
                         )
                     )
                 }
                 val instructions = mutableListOf<String>()
                 val instArr = obj.optJSONArray("instructions") ?: JSONArray()
                 for (k in 0 until instArr.length()) {
-                    instructions.add(instArr.optString(k, ""))
+                    instructions.add(instArr.optString(k, "").trim().take(1000))
                 }
                 recipes.add(
                     Recipe(
-                        id = obj.optString("id", ""),
-                        title = obj.optString("title", "Receta"),
-                        category = obj.optString("category", "Almuerzos"),
-                        servings = obj.optInt("servings", 4).coerceAtLeast(1),
-                        prepTimeMinutes = obj.optInt("prepTimeMinutes", 0).coerceAtLeast(0),
-                        cookTimeMinutes = obj.optInt("cookTimeMinutes", 0).coerceAtLeast(0),
-                        difficulty = obj.optString("difficulty", "Fácil"),
-                        ingredients = ingredients,
-                        instructions = instructions.filter { it.isNotBlank() },
-                        notes = obj.optString("notes", ""),
-                        imageUrl = obj.optString("imageUrl", "")
+                        id = obj.optString("id", "").trim().take(128),
+                        title = obj.optString("title", "Receta").trim().ifBlank { "Receta" }.take(200),
+                        category = obj.optString("category", "Almuerzos").trim().ifBlank { "Almuerzos" }.take(50),
+                        servings = obj.optInt("servings", 4).coerceIn(1, 1000),
+                        prepTimeMinutes = obj.optInt("prepTimeMinutes", 0).coerceIn(0, 1440),
+                        cookTimeMinutes = obj.optInt("cookTimeMinutes", 0).coerceIn(0, 1440),
+                        difficulty = obj.optString("difficulty", "Fácil").trim().ifBlank { "Fácil" }.take(30),
+                        ingredients = ingredients.take(150),
+                        instructions = instructions.filter { it.isNotBlank() }.take(150),
+                        notes = obj.optString("notes", "").take(5000),
+                        imageUrl = com.example.util.SecurityUtils.sanitizeImageUri(obj.optString("imageUrl", ""))
                     )
                 )
             }
@@ -172,15 +172,15 @@ object FullBackupManager {
                 val obj = panArray.getJSONObject(i)
                 pantry.add(
                     PantryItem(
-                        id = obj.optString("id", ""),
-                        name = obj.optString("name", ""),
-                        category = obj.optString("category", "Despensa"),
-                        quantity = obj.optDouble("quantity", 0.0),
-                        unit = obj.optString("unit", "unidades"),
-                        minQuantity = obj.optDouble("minQuantity", 0.0),
-                        cost = obj.optDouble("cost", 0.0),
-                        costBaseQuantity = obj.optDouble("costBaseQuantity", 0.0),
-                        expirationDate = obj.optString("expirationDate", "")
+                        id = obj.optString("id", "").trim().take(128),
+                        name = obj.optString("name", "").trim().take(100),
+                        category = obj.optString("category", "Despensa").trim().ifBlank { "Despensa" }.take(50),
+                        quantity = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("quantity", 0.0)),
+                        unit = obj.optString("unit", "unidades").trim().ifBlank { "unidades" }.take(30),
+                        minQuantity = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("minQuantity", 0.0)),
+                        cost = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("cost", 0.0)),
+                        costBaseQuantity = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("costBaseQuantity", 0.0)),
+                        expirationDate = obj.optString("expirationDate", "").trim().take(50)
                     )
                 )
             }
@@ -191,13 +191,13 @@ object FullBackupManager {
                 val obj = shopArray.getJSONObject(i)
                 shopping.add(
                     ShoppingItem(
-                        id = obj.optString("id", ""),
-                        name = obj.optString("name", ""),
-                        category = obj.optString("category", "Despensa"),
-                        quantity = obj.optDouble("quantity", 1.0),
-                        unit = obj.optString("unit", "unidades"),
+                        id = obj.optString("id", "").trim().take(128),
+                        name = obj.optString("name", "").trim().take(100),
+                        category = obj.optString("category", "Despensa").trim().ifBlank { "Despensa" }.take(50),
+                        quantity = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("quantity", 1.0)),
+                        unit = obj.optString("unit", "unidades").trim().ifBlank { "unidades" }.take(30),
                         isPurchased = obj.optBoolean("isPurchased", false),
-                        recipeSource = obj.optString("recipeSource", "")
+                        recipeSource = obj.optString("recipeSource", "").trim().take(200)
                     )
                 )
             }
@@ -206,18 +206,18 @@ object FullBackupManager {
             val logArray = root.optJSONArray("productionLogs") ?: JSONArray()
             for (i in 0 until logArray.length()) {
                 val obj = logArray.getJSONObject(i)
-                val millis = obj.optLong("createdAtMillis", System.currentTimeMillis())
+                val millis = obj.optLong("createdAtMillis", System.currentTimeMillis()).coerceAtLeast(0L)
                 logs.add(
                     ProductionLog(
-                        id = obj.optString("id", ""),
-                        recipeId = obj.optString("recipeId", ""),
-                        recipeTitle = obj.optString("recipeTitle", ""),
-                        targetServings = obj.optInt("targetServings", 1),
-                        scaleFactor = obj.optDouble("scaleFactor", 1.0),
-                        totalCost = obj.optDouble("totalCost", 0.0),
-                        currencyCode = obj.optString("currencyCode", "USD"),
-                        marginPercent = obj.optInt("marginPercent", 30),
-                        suggestedPrice = obj.optDouble("suggestedPrice", 0.0),
+                        id = obj.optString("id", "").trim().take(128),
+                        recipeId = obj.optString("recipeId", "").trim().take(128),
+                        recipeTitle = obj.optString("recipeTitle", "").trim().take(200),
+                        targetServings = obj.optInt("targetServings", 1).coerceIn(1, 100_000),
+                        scaleFactor = com.example.util.SecurityUtils.clampPositive(obj.optDouble("scaleFactor", 1.0), min = 0.01, max = 10_000.0, fallback = 1.0),
+                        totalCost = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("totalCost", 0.0), com.example.util.SecurityUtils.MAX_PRODUCTION_CURRENCY_VALUE),
+                        currencyCode = obj.optString("currencyCode", "USD").trim().ifBlank { "USD" }.take(16),
+                        marginPercent = com.example.util.SecurityUtils.clampMarginPercent(obj.optInt("marginPercent", 0)),
+                        suggestedPrice = com.example.util.SecurityUtils.clampNonNegative(obj.optDouble("suggestedPrice", 0.0), com.example.util.SecurityUtils.MAX_PRODUCTION_CURRENCY_VALUE),
                         createdAt = Timestamp(millis / 1000L, ((millis % 1000L) * 1_000_000L).toInt())
                     )
                 )
@@ -228,8 +228,8 @@ object FullBackupManager {
                 pantry = pantry,
                 shopping = shopping,
                 productionLogs = logs,
-                currencyCode = if (root.has("currencyCode")) root.optString("currencyCode") else null,
-                marginPercent = if (root.has("marginPercent")) root.optInt("marginPercent") else null
+                currencyCode = if (root.has("currencyCode")) root.optString("currencyCode").trim().take(16) else null,
+                marginPercent = if (root.has("marginPercent")) com.example.util.SecurityUtils.clampMarginPercent(root.optInt("marginPercent")) else null
             )
         } catch (_: Exception) {
             null

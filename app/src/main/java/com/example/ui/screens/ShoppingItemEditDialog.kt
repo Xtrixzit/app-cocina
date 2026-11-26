@@ -114,7 +114,7 @@ fun ShoppingItemEditDialog(
                                 DropdownMenuItem(
                                     text = { Text(LocalizedLabels.unit(context, u)) },
                                     onClick = {
-                                        val currentQty = UnitConverter.parseDecimal(quantityText)
+                                        val currentQty = UnitConverter.parseNonNegativeDecimal(quantityText)
                                         val converted = currentQty?.let { UnitConverter.convert(it, unit, u) }
                                         if (converted != null) {
                                             quantityText = UnitConverter.formatQuantity(converted)
@@ -128,7 +128,7 @@ fun ShoppingItemEditDialog(
                     }
                 }
 
-                val parsedPreviewQty = UnitConverter.parseDecimal(quantityText) ?: 0.0
+                val parsedPreviewQty = UnitConverter.parseNonNegativeDecimal(quantityText) ?: 0.0
                 UnitConverter.humanEquivalent(parsedPreviewQty, unit)?.let { (eqVal, eqUnit) ->
                     Text(
                         text = stringResource(
@@ -146,11 +146,11 @@ fun ShoppingItemEditDialog(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val parsedQty = UnitConverter.parseDecimal(quantityText) ?: 0.0
+                        val parsedQty = UnitConverter.parseNonNegativeDecimal(quantityText) ?: 0.0
                         onSave(
                             item.copy(
                                 name = name.trim(),
-                                quantity = parsedQty.coerceAtLeast(0.0),
+                                quantity = parsedQty,
                                 unit = unit.trim()
                             )
                         )

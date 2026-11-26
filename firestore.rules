@@ -97,7 +97,8 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                        isValidId(licenseCode) &&
                        existing().active == true &&
-                       (existing().assignedUid == '' || existing().assignedUid == request.auth.uid) &&
+                       (!('expiresAt' in existing()) || existing().expiresAt > request.time) &&
+                       (!('assignedUid' in existing()) || existing().assignedUid == '') &&
                        incoming().active == existing().active &&
                        incoming().assignedUid == request.auth.uid &&
                        (!('assignedEmail' in incoming()) || (incoming().assignedEmail is string && incoming().assignedEmail.size() <= 200)) &&

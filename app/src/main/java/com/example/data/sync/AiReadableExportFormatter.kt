@@ -12,6 +12,8 @@ import com.example.settings.AppSettingsPreferences
 import com.example.settings.CurrencyOption
 import com.example.util.LocaleHelper
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
+import com.example.util.SecurityUtils
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -25,10 +27,11 @@ import java.util.Locale
 object AiReadableExportFormatter {
 
     private fun fmtNumber(value: Double): String {
-        return if (value % 1.0 == 0.0) {
-            value.toInt().toString()
+        val safe = SecurityUtils.clampNonNegative(value, SecurityUtils.MAX_PRODUCTION_CURRENCY_VALUE)
+        return if (safe % 1.0 == 0.0) {
+            safe.toLong().toString()
         } else {
-            String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+            String.format(Locale.US, "%.2f", safe).trimEnd('0').trimEnd('.')
         }
     }
 
@@ -47,14 +50,7 @@ object AiReadableExportFormatter {
         }
     }
 
-    private fun escapeCsv(raw: String): String {
-        val cleaned = raw.replace("\r\n", " ").replace("\n", " ")
-        return if (cleaned.contains(',') || cleaned.contains('"') || cleaned.contains(';')) {
-            "\"${cleaned.replace("\"", "\"\"")}\""
-        } else {
-            cleaned
-        }
-    }
+    private fun escapeCsv(raw: String): String = SecurityUtils.sanitizeCsvCell(raw)
 
     private fun pantryStatusLabel(loc: Context, item: PantryItem): String = when {
         item.quantity <= 0.0 -> loc.getString(R.string.ai_doc_status_out)
@@ -73,8 +69,14 @@ object AiReadableExportFormatter {
         timestampMillis: Long = System.currentTimeMillis()
     ): String {
         val loc = LocaleHelper.localizedContext(context)
+        val localRecipes = recipes.map { SampleContentLocalizer.localizeRecipe(loc, it) }
+        val localPantry = pantry.map { SampleContentLocalizer.localizePantryItem(loc, it) }
+        val localShopping = shopping.map { SampleContentLocalizer.localizeShoppingItem(loc, it) }
+        val localLogs = productionLogs.map { SampleContentLocalizer.localizeProductionLog(loc, it) }
+
         val currency = CurrencyOption.fromCode(currencyCode)
         val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+        val servShort = loc.getString(R.string.ai_doc_serv_short)
         val sb = StringBuilder()
 
         sb.appendLine("# ${loc.getString(R.string.ai_doc_title)}")
@@ -83,12 +85,12 @@ object AiReadableExportFormatter {
         sb.appendLine()
 
         // 1. Pantry Inventory
-        sb.appendLine("## ${loc.getString(R.string.ai_doc_pantry_section, pantry.size)}")
+        sb.appendLine("## ${loc.getString(R.string.ai_doc_pantry_section, localPantry.size)}")
         sb.appendLine()
-        if (pantry.isEmpty()) {
+        if (localPantry.isEmpty()) {
             sb.appendLine("- ${loc.getString(R.string.ai_doc_pantry_empty)}")
         } else {
-            val grouped = pantry.sortedBy { it.name.lowercase() }.groupBy { it.category }
+            val grouped = localPantry.sortedBy { it.name.lowercase() }.groupBy { it.category }
             for ((cat, items) in grouped) {
                 val catDisp = LocalizedLabels.pantryCategory(loc, cat)
                 sb.appendLine("### $catDisp")
@@ -113,12 +115,12 @@ object AiReadableExportFormatter {
         }
 
         // 2. Shopping List
-        sb.appendLine("## ${loc.getString(R.string.ai_doc_shopping_section, shopping.size)}")
+        sb.appendLine("## ${loc.getString(R.string.ai_doc_shopping_section, localShopping.size)}")
         sb.appendLine()
-        if (shopping.isEmpty()) {
+        if (localShopping.isEmpty()) {
             sb.appendLine("- ${loc.getString(R.string.ai_doc_shopping_empty)}")
         } else {
-            for (item in shopping.sortedWith(compareBy<ShoppingItem> { it.isPurchased }.thenBy { it.name.lowercase() })) {
+            for (item in localShopping.sortedWith(compareBy<ShoppingItem> { it.isPurchased }.thenBy { it.name.lowercase() })) {
                 val check = if (item.isPurchased) "[x]" else "[ ]"
                 val stateLabel = if (item.isPurchased) {
                     loc.getString(R.string.ai_doc_shopping_done)
@@ -133,12 +135,12 @@ object AiReadableExportFormatter {
         sb.appendLine()
 
         // 3. Saved Recipes
-        sb.appendLine("## ${loc.getString(R.string.ai_doc_recipes_section, recipes.size)}")
+        sb.appendLine("## ${loc.getString(R.string.ai_doc_recipes_section, localRecipes.size)}")
         sb.appendLine()
-        if (recipes.isEmpty()) {
+        if (localRecipes.isEmpty()) {
             sb.appendLine("- ${loc.getString(R.string.ai_doc_recipes_empty)}")
         } else {
-            for (recipe in recipes.sortedBy { it.title.lowercase() }) {
+            for (recipe in localRecipes.sortedBy { it.title.lowercase() }) {
                 val catDisp = LocalizedLabels.recipeCategory(loc, recipe.category)
                 val diffDisp = LocalizedLabels.difficulty(loc, recipe.difficulty)
                 sb.appendLine("### ${recipe.title} ($catDisp)")
@@ -175,13 +177,13 @@ object AiReadableExportFormatter {
         }
 
         // 4. Recent Production & Cost Logs
-        if (productionLogs.isNotEmpty()) {
+        if (localLogs.isNotEmpty()) {
             sb.appendLine("## ${loc.getString(R.string.ai_doc_production_section)}")
             sb.appendLine()
-            for (log in productionLogs.take(25)) {
+            for (log in localLogs.take(25)) {
                 val logCurrency = CurrencyOption.fromCode(log.currencyCode)
                 sb.appendLine(
-                    "- **${log.recipeTitle}**: ${log.targetServings} serv. (x${fmtNumber(log.scaleFactor)}) | " +
+                    "- **${log.recipeTitle}**: ${log.targetServings} $servShort (x${fmtNumber(log.scaleFactor)}) | " +
                         "${AppSettingsPreferences.formatMoney(log.totalCost, logCurrency)} -> " +
                         "${AppSettingsPreferences.formatMoney(log.suggestedPrice, logCurrency)} (+${log.marginPercent}%)"
                 )
@@ -202,8 +204,14 @@ object AiReadableExportFormatter {
         timestampMillis: Long = System.currentTimeMillis()
     ): String {
         val loc = LocaleHelper.localizedContext(context)
+        val localRecipes = recipes.map { SampleContentLocalizer.localizeRecipe(loc, it) }
+        val localPantry = pantry.map { SampleContentLocalizer.localizePantryItem(loc, it) }
+        val localShopping = shopping.map { SampleContentLocalizer.localizeShoppingItem(loc, it) }
+        val localLogs = productionLogs.map { SampleContentLocalizer.localizeProductionLog(loc, it) }
+
         val currency = CurrencyOption.fromCode(currencyCode)
         val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+        val servShort = loc.getString(R.string.ai_doc_serv_short)
 
         return buildString {
             appendLine("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"/>")
@@ -213,12 +221,20 @@ object AiReadableExportFormatter {
             appendLine("<p><em>${escapeHtml(loc.getString(R.string.ai_doc_generated_at, dateStr, currency.code, marginPercent))}</em></p>")
 
             // Pantry table
-            appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_pantry_section, pantry.size))}</h2>")
-            if (pantry.isEmpty()) {
+            appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_pantry_section, localPantry.size))}</h2>")
+            if (localPantry.isEmpty()) {
                 appendLine("<p>${escapeHtml(loc.getString(R.string.ai_doc_pantry_empty))}</p>")
             } else {
-                appendLine("<table><tr><th>Categoría</th><th>Producto</th><th>Cantidad</th><th>Estado</th><th>Notas / Costo</th></tr>")
-                for (item in pantry.sortedBy { it.name.lowercase() }) {
+                appendLine(
+                    "<table><tr>" +
+                        "<th>${escapeHtml(loc.getString(R.string.ai_doc_col_category))}</th>" +
+                        "<th>${escapeHtml(loc.getString(R.string.ai_doc_col_product))}</th>" +
+                        "<th>${escapeHtml(loc.getString(R.string.ai_doc_col_quantity))}</th>" +
+                        "<th>${escapeHtml(loc.getString(R.string.ai_doc_col_status))}</th>" +
+                        "<th>${escapeHtml(loc.getString(R.string.ai_doc_col_notes_cost))}</th>" +
+                        "</tr>"
+                )
+                for (item in localPantry.sortedBy { it.name.lowercase() }) {
                     val catDisp = LocalizedLabels.pantryCategory(loc, item.category)
                     val unitDisp = LocalizedLabels.unit(loc, item.unit)
                     val status = pantryStatusLabel(loc, item)
@@ -237,12 +253,12 @@ object AiReadableExportFormatter {
             }
 
             // Shopping list
-            appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_shopping_section, shopping.size))}</h2>")
-            if (shopping.isEmpty()) {
+            appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_shopping_section, localShopping.size))}</h2>")
+            if (localShopping.isEmpty()) {
                 appendLine("<p>${escapeHtml(loc.getString(R.string.ai_doc_shopping_empty))}</p>")
             } else {
                 appendLine("<ul>")
-                for (item in shopping.sortedWith(compareBy<ShoppingItem> { it.isPurchased }.thenBy { it.name.lowercase() })) {
+                for (item in localShopping.sortedWith(compareBy<ShoppingItem> { it.isPurchased }.thenBy { it.name.lowercase() })) {
                     val stateLabel = if (item.isPurchased) {
                         loc.getString(R.string.ai_doc_shopping_done)
                     } else {
@@ -256,11 +272,11 @@ object AiReadableExportFormatter {
             }
 
             // Recipes
-            appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_recipes_section, recipes.size))}</h2>")
-            if (recipes.isEmpty()) {
+            appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_recipes_section, localRecipes.size))}</h2>")
+            if (localRecipes.isEmpty()) {
                 appendLine("<p>${escapeHtml(loc.getString(R.string.ai_doc_recipes_empty))}</p>")
             } else {
-                for (recipe in recipes.sortedBy { it.title.lowercase() }) {
+                for (recipe in localRecipes.sortedBy { it.title.lowercase() }) {
                     val catDisp = LocalizedLabels.recipeCategory(loc, recipe.category)
                     val diffDisp = LocalizedLabels.difficulty(loc, recipe.difficulty)
                     appendLine("<h3>${escapeHtml(recipe.title)} (${escapeHtml(catDisp)})</h3>")
@@ -288,12 +304,12 @@ object AiReadableExportFormatter {
                 }
             }
 
-            if (productionLogs.isNotEmpty()) {
+            if (localLogs.isNotEmpty()) {
                 appendLine("<h2>${escapeHtml(loc.getString(R.string.ai_doc_production_section))}</h2><ul>")
-                for (log in productionLogs.take(25)) {
+                for (log in localLogs.take(25)) {
                     val logCurrency = CurrencyOption.fromCode(log.currencyCode)
                     appendLine(
-                        "<li><b>${escapeHtml(log.recipeTitle)}</b>: ${log.targetServings} serv. — " +
+                        "<li><b>${escapeHtml(log.recipeTitle)}</b>: ${log.targetServings} ${escapeHtml(servShort)} — " +
                             "${escapeHtml(AppSettingsPreferences.formatMoney(log.totalCost, logCurrency))} -> " +
                             "${escapeHtml(AppSettingsPreferences.formatMoney(log.suggestedPrice, logCurrency))} (+${log.marginPercent}%)</li>"
                     )
@@ -312,13 +328,22 @@ object AiReadableExportFormatter {
         shopping: List<ShoppingItem>
     ): String {
         val loc = LocaleHelper.localizedContext(context)
+        val localRecipes = recipes.map { SampleContentLocalizer.localizeRecipe(loc, it) }
+        val localPantry = pantry.map { SampleContentLocalizer.localizePantryItem(loc, it) }
+        val localShopping = shopping.map { SampleContentLocalizer.localizeShoppingItem(loc, it) }
+
         val currency = AppSettingsPreferences.getCurrency(context)
+        val typePantry = loc.getString(R.string.ai_doc_csv_type_pantry)
+        val typeShopping = loc.getString(R.string.ai_doc_csv_type_shopping)
+        val typeRecipe = loc.getString(R.string.ai_doc_csv_type_recipe)
+        val unitServings = loc.getString(R.string.ai_doc_csv_unit_servings)
+
         val sb = StringBuilder()
         // UTF-8 BOM so Excel / Google Sheets parse Spanish/French/Portuguese accents cleanly
         sb.append('\uFEFF')
-        sb.appendLine("Tipo,Categoria,Nombre,Cantidad,Unidad,Estado_o_Minimo,Costo,Detalle_Ingredientes")
+        sb.appendLine(loc.getString(R.string.ai_doc_csv_header))
 
-        for (item in pantry.sortedBy { it.name.lowercase() }) {
+        for (item in localPantry.sortedBy { it.name.lowercase() }) {
             val catDisp = LocalizedLabels.pantryCategory(loc, item.category)
             val unitDisp = LocalizedLabels.unit(loc, item.unit)
             val status = pantryStatusLabel(loc, item)
@@ -329,7 +354,7 @@ object AiReadableExportFormatter {
             val costStr = if (item.cost > 0.0) AppSettingsPreferences.formatMoney(item.cost, currency) else ""
             sb.appendLine(
                 listOf(
-                    "Despensa",
+                    escapeCsv(typePantry),
                     escapeCsv(catDisp),
                     escapeCsv(item.name),
                     fmtNumber(item.quantity),
@@ -341,7 +366,7 @@ object AiReadableExportFormatter {
             )
         }
 
-        for (item in shopping.sortedWith(compareBy<ShoppingItem> { it.isPurchased }.thenBy { it.name.lowercase() })) {
+        for (item in localShopping.sortedWith(compareBy<ShoppingItem> { it.isPurchased }.thenBy { it.name.lowercase() })) {
             val catDisp = LocalizedLabels.pantryCategory(loc, item.category)
             val unitDisp = LocalizedLabels.unit(loc, item.unit)
             val status = if (item.isPurchased) {
@@ -351,7 +376,7 @@ object AiReadableExportFormatter {
             }
             sb.appendLine(
                 listOf(
-                    "Compras",
+                    escapeCsv(typeShopping),
                     escapeCsv(catDisp),
                     escapeCsv(item.name),
                     fmtNumber(item.quantity),
@@ -363,18 +388,18 @@ object AiReadableExportFormatter {
             )
         }
 
-        for (recipe in recipes.sortedBy { it.title.lowercase() }) {
+        for (recipe in localRecipes.sortedBy { it.title.lowercase() }) {
             val catDisp = LocalizedLabels.recipeCategory(loc, recipe.category)
             val ingList = recipe.ingredients.joinToString("; ") { ing ->
                 "${ing.name}: ${fmtNumber(ing.amount)} ${LocalizedLabels.unit(loc, ing.unit)}"
             }
             sb.appendLine(
                 listOf(
-                    "Receta",
+                    escapeCsv(typeRecipe),
                     escapeCsv(catDisp),
                     escapeCsv(recipe.title),
                     recipe.servings.toString(),
-                    "porciones",
+                    escapeCsv(unitServings),
                     escapeCsv("${recipe.totalTimeMinutes} min"),
                     "",
                     escapeCsv(ingList)
@@ -391,8 +416,7 @@ object AiReadableExportFormatter {
         content: String
     ): Uri {
         val dir = File(context.cacheDir, "ai_exports").apply { mkdirs() }
-        val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val outFile = File(dir, safeName)
+        val outFile = SecurityUtils.resolveConfinedFile(dir, fileName)
         outFile.writeText(content, Charsets.UTF_8)
         return FileProvider.getUriForFile(
             context,

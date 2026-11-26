@@ -100,18 +100,22 @@ fun RecipeCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                    ) {
-                        Text(
-                            text = LocalizedLabels.recipeCategory(context, recipe.category).uppercase(),
-                            fontFamily = CaveatFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
+                    if (recipe.category.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                        ) {
+                            Text(
+                                text = LocalizedLabels.recipeCategory(context, recipe.category).uppercase(),
+                                fontFamily = CaveatFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
                     }
 
                     if (feasibilityMatchPct != null) {
@@ -199,18 +203,20 @@ fun RecipeCard(
                             lineHeight = 26.sp
                         )
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        if (recipe.difficulty.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
 
-                        Text(
-                            text = stringResource(
-                                R.string.recipe_card_difficulty,
-                                LocalizedLabels.difficulty(context, recipe.difficulty)
-                            ),
-                            fontFamily = PatrickHandFontFamily,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                            Text(
+                                text = stringResource(
+                                    R.string.recipe_card_difficulty,
+                                    LocalizedLabels.difficulty(context, recipe.difficulty)
+                                ),
+                                fontFamily = PatrickHandFontFamily,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
 
@@ -226,7 +232,7 @@ fun RecipeCard(
                         val perServingFormatted = AppSettingsPreferences.formatMoney(perServing, currency)
                         DetailPill(
                             icon = Icons.Default.MonetizationOn,
-                            text = "$totalFormatted ($perServingFormatted/p)"
+                            text = stringResource(R.string.recipe_card_per_serving_fmt, totalFormatted, perServingFormatted)
                         )
                     }
 

@@ -83,8 +83,10 @@ object RecipePhotoGenerator {
         category: String,
         ingredients: List<RecipeIngredient>
     ): String {
+        val safeTitle = com.example.util.SecurityUtils.sanitizePromptInput(title, maxLength = 120)
+        val safeCategory = com.example.util.SecurityUtils.sanitizePromptInput(category, maxLength = 40)
         val topIngredients = ingredients
-            .map { it.name.trim() }
+            .map { com.example.util.SecurityUtils.sanitizePromptInput(it.name, maxLength = 60) }
             .filter { it.isNotBlank() }
             .take(5)
             .joinToString(", ")
@@ -93,14 +95,16 @@ object RecipePhotoGenerator {
         } else {
             ""
         }
-        return "Photorealistic DSLR food photography of a freshly cooked dish of '${title.trim()}' " +
-            "($category)$ingredientsClause, served appetizingly on handmade ceramic dishware on a rustic " +
+        return "Photorealistic DSLR food photography of a freshly cooked dish of '$safeTitle' " +
+            "($safeCategory)$ingredientsClause, served appetizingly on handmade ceramic dishware on a rustic " +
             "wooden kitchen table, warm natural window daylight, authentic cooking textures, shallow depth " +
             "of field, crisp culinary detail, strictly NO illustration, NO cartoon, NO drawing, NO text, NO watermarks."
     }
 
     fun buildEnhancementPrompt(title: String, category: String): String {
-        val dishName = title.trim().ifBlank { category.ifBlank { "homemade dish" } }
+        val safeTitle = com.example.util.SecurityUtils.sanitizePromptInput(title, maxLength = 120)
+        val safeCategory = com.example.util.SecurityUtils.sanitizePromptInput(category, maxLength = 40)
+        val dishName = safeTitle.ifBlank { safeCategory.ifBlank { "homemade dish" } }
         return "Enhance this real-life photograph of '$dishName' into a natural, appetizing DSLR culinary photograph. " +
             "Preserve the exact real food, ingredients, and authentic plating, while improving natural window daylight, " +
             "surface food texture, focus sharpness, and clean rustic wooden table presentation. " +

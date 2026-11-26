@@ -61,14 +61,14 @@ fun PantryFormDialog(
         mutableStateOf(
             if (initialItem != null) {
                 UnitConverter.formatQuantity(initialItem.quantity)
-            } else "500"
+            } else ""
         )
     }
     var minQuantityText by remember {
         mutableStateOf(
             if (initialItem != null && initialItem.minQuantity > 0.0) {
                 UnitConverter.formatQuantity(initialItem.minQuantity)
-            } else "100"
+            } else ""
         )
     }
     var expirationDate by remember { mutableStateOf(initialItem?.expirationDate ?: "") }
@@ -99,8 +99,6 @@ fun PantryFormDialog(
         mutableStateOf(
             if (initialItem != null && initialItem.costBaseQuantity > 0.0) {
                 UnitConverter.formatQuantity(initialItem.costBaseQuantity)
-            } else if (initialItem == null) {
-                "1"
             } else ""
         )
     }
@@ -110,11 +108,11 @@ fun PantryFormDialog(
     val compatiblePriceUnits = remember(unit) { UnitConverter.compatibleUnitsFor(unit) }
     val activePriceUnit = if (priceInputUnit in compatiblePriceUnits) priceInputUnit else unit
 
-    val parsedCurrentQty = UnitConverter.parseDecimal(quantityText) ?: 0.0
-    val parsedCost = UnitConverter.parseDecimal(costText) ?: 0.0
+    val parsedCurrentQty = UnitConverter.parseNonNegativeDecimal(quantityText) ?: 0.0
+    val parsedCost = UnitConverter.parseNonNegativeDecimal(costText) ?: 0.0
     val defaultBatchInPriceUnit = UnitConverter.convert(parsedCurrentQty, unit, activePriceUnit) ?: parsedCurrentQty
-    val parsedBaseInPriceUnit = UnitConverter.parseDecimal(costBaseQtyText)
-        ?: if (defaultBatchInPriceUnit > 0.0) defaultBatchInPriceUnit else 1.0
+    val parsedBaseInPriceUnit = UnitConverter.parseNonNegativeDecimal(costBaseQtyText)
+        ?: defaultBatchInPriceUnit.coerceAtLeast(0.0)
 
     val costBreakdown = UnitConverter.computePantryCostBreakdown(
         enteredPrice = parsedCost,
@@ -198,6 +196,7 @@ fun PantryFormDialog(
                         value = quantityText,
                         onValueChange = { quantityText = it },
                         label = { Text(stringResource(R.string.pantry_form_qty_label)) },
+                        placeholder = { Text("0") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier
                             .weight(1.1f)
@@ -231,12 +230,12 @@ fun PantryFormDialog(
                                     onClick = {
                                         val oldUnit = unit
                                         if (oldUnit != newUnit && UnitConverter.isSameOrCompatible(oldUnit, newUnit)) {
-                                            UnitConverter.parseDecimal(quantityText)?.let { oldQty ->
+                                            UnitConverter.parseNonNegativeDecimal(quantityText)?.let { oldQty ->
                                                 UnitConverter.convert(oldQty, oldUnit, newUnit)?.let { converted ->
                                                     quantityText = UnitConverter.formatQuantity(converted)
                                                 }
                                             }
-                                            UnitConverter.parseDecimal(minQuantityText)?.let { oldMin ->
+                                            UnitConverter.parseNonNegativeDecimal(minQuantityText)?.let { oldMin ->
                                                 UnitConverter.convert(oldMin, oldUnit, newUnit)?.let { convertedMin ->
                                                     minQuantityText = UnitConverter.formatQuantity(convertedMin)
                                                 }
@@ -313,7 +312,7 @@ fun PantryFormDialog(
                                 value = costText,
                                 onValueChange = { costText = it },
                                 label = { Text(stringResource(R.string.pantry_form_price_label, currency.symbol)) },
-                                placeholder = { Text("3.50") },
+                                placeholder = { Text("0.00") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier
                                     .weight(1.1f)
@@ -348,7 +347,7 @@ fun PantryFormDialog(
                                                 onClick = {
                                                     val prevUnit = activePriceUnit
                                                     if (!isPerUnitPriceMode && prevUnit != pUnit) {
-                                                        UnitConverter.parseDecimal(costBaseQtyText)?.let { oldBase ->
+                                                        UnitConverter.parseNonNegativeDecimal(costBaseQtyText)?.let { oldBase ->
                                                             UnitConverter.convert(oldBase, prevUnit, pUnit)?.let { conv ->
                                                                 costBaseQtyText = UnitConverter.formatQuantity(conv)
                                                             }
@@ -449,7 +448,7 @@ fun PantryFormDialog(
                     value = minQuantityText,
                     onValueChange = { minQuantityText = it },
                     label = { Text("${stringResource(R.string.pantry_form_min_qty_label)} ($displayUnit)") },
-                    placeholder = { Text("100") },
+                    placeholder = { Text("0") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -471,8 +470,8 @@ fun PantryFormDialog(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val qty = (UnitConverter.parseDecimal(quantityText) ?: 0.0).coerceAtLeast(0.0)
-                        val minQty = (UnitConverter.parseDecimal(minQuantityText) ?: 0.0).coerceAtLeast(0.0)
+                        val qty = UnitConverter.parseNonNegativeDecimal(quantityText) ?: 0.0
+                        val minQty = UnitConverter.parseNonNegativeDecimal(minQuantityText) ?: 0.0
                         val finalCostVal = costBreakdown.costInItemUnit.coerceAtLeast(0.0)
                         val finalCostBaseVal = if (finalCostVal > 0.0) {
                             costBreakdown.baseQuantityInItemUnit.coerceAtLeast(0.0001)

@@ -102,6 +102,7 @@ import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
 import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
+import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 import java.util.Locale
 
@@ -154,7 +155,7 @@ fun RecipeDetailScreen(
 
     val costBreakdown = recipe.ingredients.map { ing ->
         val needed = ing.amount * scaleFactor
-        val inStockItem = pantryItems.find { it.name.trim().equals(ing.name.trim(), ignoreCase = true) }
+        val inStockItem = pantryItems.find { SampleContentLocalizer.sameItemName(it.name, ing.name) }
         val inStockConverted = UnitConverter.availableInTargetUnit(inStockItem, ing.unit)
         if (inStockConverted + 0.0001 < needed) {
             missingIngredientsCount++
@@ -268,37 +269,45 @@ fun RecipeDetailScreen(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+            if (recipe.category.isNotBlank() || recipe.difficulty.isNotBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = LocalizedLabels.recipeCategory(context, recipe.category),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
+                    if (recipe.category.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = LocalizedLabels.recipeCategory(context, recipe.category),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Text(
-                        text = stringResource(
-                            R.string.recipe_detail_difficulty,
-                            LocalizedLabels.difficulty(context, recipe.difficulty)
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
+                    if (recipe.difficulty.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.recipe_detail_difficulty,
+                                    LocalizedLabels.difficulty(context, recipe.difficulty)
+                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -526,40 +535,50 @@ fun RecipeDetailScreen(
                             )
                         }
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = stringResource(R.string.recipe_detail_cost_total),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = AppSettingsPreferences.formatMoney(totalProductionCost, currency),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = stringResource(
-                                    R.string.recipe_detail_cost_per_serving,
-                                    AppSettingsPreferences.formatMoney(costPerServing, currency)
-                                ),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            if (totalProductionCost > 0.0) {
+                        if (totalProductionCost > 0.0) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = stringResource(R.string.recipe_detail_cost_total),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = AppSettingsPreferences.formatMoney(totalProductionCost, currency),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                                 Text(
                                     text = stringResource(
-                                        R.string.recipe_detail_suggested_sale,
-                                        marginPercent,
-                                        AppSettingsPreferences.formatMoney(suggestedTotalSale, currency),
-                                        AppSettingsPreferences.formatMoney(suggestedPerServingSale, currency)
+                                        R.string.recipe_detail_cost_per_serving,
+                                        AppSettingsPreferences.formatMoney(costPerServing, currency)
                                     ),
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = StockGreen
+                                    color = MaterialTheme.colorScheme.primary
                                 )
+                                if (marginPercent > 0) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.recipe_detail_suggested_sale,
+                                            marginPercent,
+                                            AppSettingsPreferences.formatMoney(suggestedTotalSale, currency),
+                                            AppSettingsPreferences.formatMoney(suggestedPerServingSale, currency)
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = StockGreen
+                                    )
+                                }
                             }
+                        } else {
+                            Text(
+                                text = stringResource(R.string.recipe_detail_cost_not_entered),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
                         }
                     }
 
@@ -701,7 +720,7 @@ fun RecipeDetailScreen(
                     val displayRecipeUnit = LocalizedLabels.unit(context, ingredient.unit)
 
                     val inStockItem = pantryItems.find {
-                        it.name.trim().equals(ingredient.name.trim(), ignoreCase = true)
+                        SampleContentLocalizer.sameItemName(it.name, ingredient.name)
                     }
                     val convertedStock = UnitConverter.availableInTargetUnit(inStockItem, ingredient.unit)
                     val isSufficient = convertedStock + 0.0001 >= scaledAmount
@@ -1027,8 +1046,8 @@ fun RecipeDetailScreen(
             var batchUnitExpanded by remember(idx) { mutableStateOf(false) }
 
             fun recalcFromBatch(paidStr: String, qtyStr: String, bUnit: String) {
-                val paid = UnitConverter.parseDecimal(paidStr) ?: 0.0
-                val qty = UnitConverter.parseDecimal(qtyStr) ?: 0.0
+                val paid = UnitConverter.parseNonNegativeDecimal(paidStr) ?: 0.0
+                val qty = UnitConverter.parseNonNegativeDecimal(qtyStr) ?: 0.0
                 if (paid > 0.0 && qty > 0.0) {
                     val breakdown = UnitConverter.computePantryCostBreakdown(
                         enteredPrice = paid,
@@ -1142,7 +1161,7 @@ fun RecipeDetailScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            val newCost = UnitConverter.parseDecimal(manualCostInputText) ?: 0.0
+                            val newCost = UnitConverter.parseNonNegativeDecimal(manualCostInputText) ?: 0.0
                             val updatedIngredients = recipe.ingredients.toMutableList()
                             updatedIngredients[idx] = targetIngredient.copy(manualUnitCost = newCost)
                             onUpdateRecipe(recipe.copy(ingredients = updatedIngredients))

@@ -266,8 +266,11 @@ fun AppNavigation(
     val isGuestMode by SessionPreferences.observeGuestMode(context).collectAsStateWithLifecycle()
 
     LaunchedEffect(currentUser?.uid) {
-        if (currentUser != null && SessionPreferences.isGuestMode(context)) {
-            SessionPreferences.setGuestMode(context, false)
+        if (currentUser != null) {
+            AppSettingsPreferences.setHasLoggedInBefore(context, true)
+            if (SessionPreferences.isGuestMode(context)) {
+                SessionPreferences.setGuestMode(context, false)
+            }
         }
     }
 
@@ -397,6 +400,8 @@ fun MainFeatureScreen(
     val chefChatSending by viewModel.chefChatSending.collectAsStateWithLifecycle()
     val guidedTutorialCompleted by AppSettingsPreferences.observeGuidedTutorialCompleted(context)
         .collectAsStateWithLifecycle()
+    val hasLoggedInBefore by AppSettingsPreferences.observeHasLoggedInBefore(context)
+        .collectAsStateWithLifecycle()
     val tutorialTargets = remember { mutableStateMapOf<String, Rect>() }
 
     val selectedRecipe by viewModel.selectedRecipe.collectAsState()
@@ -407,6 +412,7 @@ fun MainFeatureScreen(
     var showChefChatDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        viewModel.refreshLanguage()
         viewModel.userMessage.collectLatest { message ->
             snackbarHostState.showSnackbar(message)
         }
@@ -1055,6 +1061,11 @@ fun MainFeatureScreen(
             },
             isGuestMode = isGuestMode,
             currentUserEmail = currentUserEmail,
+            canSkipTutorial = true,
+            onSkip = {
+                AppSettingsPreferences.setGuidedTutorialCompleted(context, true)
+                selectedTab = 0
+            },
             tutorialTargets = tutorialTargets
         )
     }
