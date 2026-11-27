@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -678,6 +680,7 @@ fun MainFeatureScreen(
                                 recipeFormTarget = null
                                 showRecipeForm = true
                             },
+                            onNavigateToPantry = { selectedTab = 1 },
                             onNavigateToCheckList = { selectedTab = 2 },
                             onNavigateToProduction = { selectedTab = 3 },
                             onNavigateToSurpriseMe = { selectedTab = 4 },
@@ -901,7 +904,7 @@ fun MainFeatureScreen(
                 onDismissRequest = { showAccountDialog = false },
                 title = { Text(stringResource(R.string.account_guest_title), fontWeight = FontWeight.Bold) },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         Text(
                             text = stringResource(R.string.account_guest_active),
                             fontWeight = FontWeight.SemiBold
@@ -937,7 +940,7 @@ fun MainFeatureScreen(
                 onDismissRequest = { showAccountDialog = false },
                 title = { Text(stringResource(R.string.account_cloud_title), fontWeight = FontWeight.Bold) },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         Text(
                             text = if (currentUserName.isNotBlank()) {
                                 stringResource(R.string.account_cloud_active_named, currentUserName)
@@ -1001,13 +1004,15 @@ fun MainFeatureScreen(
                 )
             },
             text = {
-                Text(
-                    if (isGuestMode) {
-                        stringResource(R.string.about_guest_desc)
-                    } else {
-                        stringResource(R.string.about_cloud_desc)
-                    }
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        if (isGuestMode) {
+                            stringResource(R.string.about_guest_desc)
+                        } else {
+                            stringResource(R.string.about_cloud_desc)
+                        }
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = { showAboutDialog = false }) {

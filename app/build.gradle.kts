@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.recetario.kpvxfz"
     minSdk = 24
     targetSdk = 34
-    versionCode = 13
-    versionName = "1.0"
+    versionCode = 14
+    versionName = "1.1"
     buildConfigField("String", "GITHUB_UPDATE_REPO", "\"Xtrixzit/app-cocina\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

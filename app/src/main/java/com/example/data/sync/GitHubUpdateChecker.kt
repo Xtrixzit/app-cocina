@@ -222,7 +222,13 @@ object GitHubUpdateChecker {
                     currentVersionName = currentVersionName,
                     githubRepo = slug
                 )
-                if (parsed == null || parsed.latestVersionCode <= currentVersionCode) {
+                val resolvedParsed = if (parsed != null && !parsed.updateUrl.endsWith(".apk", ignoreCase = true)) {
+                    val repoApk = findBranchApkUrl(slug, "main")
+                    if (!repoApk.isNullOrBlank()) parsed.copy(updateUrl = repoApk) else parsed
+                } else {
+                    parsed
+                }
+                if (resolvedParsed == null || resolvedParsed.latestVersionCode <= currentVersionCode) {
                     val branchOutcome = checkRepoMetadataAndFallbacks(
                         slug = slug,
                         currentVersionCode = currentVersionCode,
@@ -230,12 +236,12 @@ object GitHubUpdateChecker {
                     )
                     if (branchOutcome is GitHubUpdateCheckResult.Success &&
                         branchOutcome.config != null &&
-                        branchOutcome.config.latestVersionCode > (parsed?.latestVersionCode ?: currentVersionCode)
+                        branchOutcome.config.latestVersionCode > (resolvedParsed?.latestVersionCode ?: currentVersionCode)
                     ) {
                         return@withContext branchOutcome
                     }
                 }
-                GitHubUpdateCheckResult.Success(parsed, slug)
+                GitHubUpdateCheckResult.Success(resolvedParsed, slug)
             }
         } catch (e: CancellationException) {
             throw e
@@ -291,24 +297,58 @@ object GitHubUpdateChecker {
         return GitHubUpdateCheckResult.Success(tagCfg ?: branchCfg, slug)
     }
 
-    private fun findBranchApkUrl(slug: String, defaultBranch: String): String? {
+    fun parseApkUrlFromContentsArray(jsonArrayStr: String): String? {
         return try {
-            val apkReq = Request.Builder()
-                .url("https://api.github.com/repos/$slug/contents/Recetario.apk?ref=$defaultBranch")
+            val arr = org.json.JSONArray(jsonArrayStr)
+            var fallbackApk: String? = null
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val name = obj.optString("name", "").trim()
+                if (!name.endsWith(".apk", ignoreCase = true)) continue
+                val rawUrl = obj.optString("download_url", "").trim()
+                if (!com.example.util.SecurityUtils.isSafeHttpsUrl(rawUrl)) continue
+                if (name.equals("Recetario.apk", ignoreCase = true)) {
+                    return rawUrl
+                }
+                if (fallbackApk == null) {
+                    fallbackApk = rawUrl
+                }
+            }
+            fallbackApk
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun findBranchApkUrl(slug: String, defaultBranch: String): String? {
+        try {
+            val dirReq = Request.Builder()
+                .url("https://api.github.com/repos/$slug/contents?ref=$defaultBranch")
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", "RecetarioAndroid")
                 .get()
                 .build()
-            client.newCall(apkReq).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val obj = JSONObject(resp.body?.string().orEmpty())
-                val rawDownloadUrl = obj.optString("download_url", "").trim()
-                val candidate = if (com.example.util.SecurityUtils.isSafeHttpsUrl(rawDownloadUrl)) {
-                    rawDownloadUrl
-                } else {
-                    "https://github.com/$slug/raw/$defaultBranch/Recetario.apk"
+            client.newCall(dirReq).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val parsedUrl = parseApkUrlFromContentsArray(resp.body?.string().orEmpty())
+                    if (!parsedUrl.isNullOrBlank()) return parsedUrl
                 }
-                candidate.takeIf { com.example.util.SecurityUtils.isSafeHttpsUrl(it) }
+            }
+        } catch (_: Exception) {
+        }
+
+        val rawUrl = "https://raw.githubusercontent.com/$slug/$defaultBranch/Recetario.apk"
+        val githubRawUrl = "https://github.com/$slug/raw/$defaultBranch/Recetario.apk"
+        return try {
+            val headReq = Request.Builder()
+                .url(rawUrl)
+                .header("User-Agent", "RecetarioAndroid")
+                .head()
+                .build()
+            client.newCall(headReq).execute().use { resp ->
+                if (resp.isSuccessful && com.example.util.SecurityUtils.isSafeHttpsUrl(githubRawUrl)) {
+                    githubRawUrl
+                } else null
             }
         } catch (_: Exception) {
             null

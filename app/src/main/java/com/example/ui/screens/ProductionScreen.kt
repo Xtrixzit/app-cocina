@@ -3,21 +3,25 @@ package com.example.ui.screens
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -153,95 +157,105 @@ fun ProductionScreen(
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .notebookPaperBackground()
+                .imePadding()
         ) {
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.prod_header),
-                    fontFamily = CaveatFontFamily,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-
             if (selectedRecipe == null) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = stringResource(R.string.prod_select_prompt),
-                        fontFamily = PatrickHandFontFamily,
-                        fontSize = 17.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
+                val filteredRecipes = recipes.filter { r ->
+                    val matchesCat = selectedCategory == "Todas" || r.category.equals(selectedCategory, ignoreCase = true)
+                    val matchesQuery = searchQuery.isBlank() || r.title.contains(searchQuery, ignoreCase = true)
+                    matchesCat && matchesQuery
+                }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text(stringResource(R.string.prod_search_hint), fontFamily = PatrickHandFontFamily, fontSize = 16.sp) },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (searchQuery.isNotBlank()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), strokeWidthDp = 1.2f)
-                                .testTag("production_search_recipe")
-                        )
-                    }
+                val recentLogs = when (val s = logsUiState) {
+                    is UiState.Success -> s.data
+                    else -> emptyList()
+                }
 
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    ) {
-                        items(categories) { cat ->
-                            PostItFilterChip(
-                                selected = selectedCategory == cat,
-                                onClick = { selectedCategory = cat },
-                                text = LocalizedLabels.recipeCategory(context, cat),
-                                selectedColor = PostItYellow
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .testTag("production_picker_list"),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item(key = "prod_picker_controls") {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(vertical = 4.dp)
+                                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
+                                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.prod_header),
+                                    fontFamily = CaveatFontFamily,
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+
+                            Text(
+                                text = stringResource(R.string.prod_select_prompt),
+                                fontFamily = PatrickHandFontFamily,
+                                fontSize = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 4.dp)
                             )
+
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = {
+                                    Text(
+                                        stringResource(R.string.prod_search_hint),
+                                        fontFamily = PatrickHandFontFamily,
+                                        fontSize = 16.sp
+                                    )
+                                },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotBlank()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .sketchedBorder(
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        strokeWidthDp = 1.2f
+                                    )
+                                    .testTag("production_search_recipe")
+                            )
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                items(categories) { cat ->
+                                    PostItFilterChip(
+                                        selected = selectedCategory == cat,
+                                        onClick = { selectedCategory = cat },
+                                        text = LocalizedLabels.recipeCategory(context, cat),
+                                        selectedColor = PostItYellow
+                                    )
+                                }
+                            }
                         }
                     }
-
-                    val filteredRecipes = recipes.filter { r ->
-                        val matchesCat = selectedCategory == "Todas" || r.category.equals(selectedCategory, ignoreCase = true)
-                        val matchesQuery = searchQuery.isBlank() || r.title.contains(searchQuery, ignoreCase = true)
-                        matchesCat && matchesQuery
-                    }
-
-                    val recentLogs = when (val s = logsUiState) {
-                        is UiState.Success -> s.data
-                        else -> emptyList()
-                    }
-
-                    LazyColumn(
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
                         if (filteredRecipes.isEmpty()) {
                             item {
                                 Column(
@@ -451,7 +465,6 @@ fun ProductionScreen(
                             }
                         }
                     }
-                }
             } else {
                 val recipe = selectedRecipe!!
 
@@ -535,10 +548,29 @@ fun ProductionScreen(
                 val allInStock = missingIngredientsCount == 0
 
                 LazyColumn(
-                    modifier = Modifier.testTag("production_lazy_list"),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 80.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .testTag("production_lazy_list"),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    item(key = "prod_calc_header") {
+                        Box(
+                            modifier = Modifier
+                                .padding(vertical = 2.dp)
+                                .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
+                                .padding(horizontal = 14.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.prod_header),
+                                fontFamily = CaveatFontFamily,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
                     item {
                         Card(
                             modifier = Modifier
@@ -624,7 +656,9 @@ fun ProductionScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     FilterChip(
@@ -1349,7 +1383,10 @@ fun ProductionScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
                                         Icon(
                                             Icons.Default.Inventory2,
                                             contentDescription = null,
@@ -1364,6 +1401,7 @@ fun ProductionScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
+                                    Spacer(modifier = Modifier.width(8.dp))
 
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),

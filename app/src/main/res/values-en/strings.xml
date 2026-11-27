@@ -886,4 +886,14 @@
     <string name="ai_doc_csv_type_recipe">Recipe</string>
     <string name="ai_doc_csv_unit_servings">servings</string>
     <string name="url_https_only_error">Enter a secure URL starting with https://</string>
+
+    <!-- Main Dashboard Empty State -->
+    <string name="dashboard_empty_badge">100% your data</string>
+    <string name="dashboard_empty_title">Your kitchen starts fresh</string>
+    <string name="dashboard_empty_subtitle">You haven\'t added recipes or pantry items yet. Add your dishes, categories, real costs, and profit margins to get started.</string>
+    <string name="dashboard_empty_step1">1. Record your first recipe (Desserts, Bread, Meals, Breakfast, or custom)</string>
+    <string name="dashboard_empty_step2">2. Add your real ingredients, stock, and prices in Pantry</string>
+    <string name="dashboard_empty_step3">3. Calculate portion costs, margins, and batches with zero guessed numbers</string>
+    <string name="dashboard_empty_cta_recipe">Add my first recipe</string>
+    <string name="dashboard_empty_cta_pantry">Go to Pantry</string>
 </resources>

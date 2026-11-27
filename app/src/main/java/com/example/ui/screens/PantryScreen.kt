@@ -4,12 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -74,6 +78,7 @@ import com.example.ui.theme.StockRed
 import com.example.ui.theme.StockYellow
 import com.example.util.LocalizedLabels
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PantryScreen(
     viewModel: MainViewModel,
@@ -93,6 +98,7 @@ fun PantryScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             PostItButton(
                 text = stringResource(R.string.pantry_fab_add),
@@ -104,148 +110,177 @@ fun PantryScreen(
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .notebookPaperBackground()
+                .imePadding()
+                .testTag("pantry_lazy_list"),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.pantry_header),
-                    fontFamily = CaveatFontFamily,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.pantrySearchQuery.value = it },
-                    placeholder = {
+            item(key = "pantry_controls") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .sketchedBorder(color = MaterialTheme.colorScheme.onSurface, strokeWidthDp = 2f)
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                    ) {
                         Text(
-                            stringResource(R.string.pantry_search_hint),
-                            fontFamily = PatrickHandFontFamily,
-                            fontSize = 17.sp
+                            text = stringResource(R.string.pantry_header),
+                            fontFamily = CaveatFontFamily,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
                         )
-                    },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
-                    trailingIcon = {
-                        if (searchQuery.isNotBlank()) {
-                            IconButton(onClick = { viewModel.pantrySearchQuery.value = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear), tint = MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .sketchedBorder(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), strokeWidthDp = 1.2f)
-                        .testTag("pantry_search_field"),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                PostItButton(
-                    text = stringResource(R.string.pantry_sync_btn),
-                    icon = Icons.Default.Sync,
-                    onClick = { showShareDialog = true },
-                    backgroundColor = PostItSky,
-                    rotationDegrees = 1f,
-                    fontSize = 18.sp,
-                    modifier = Modifier.testTag("share_inventory_button")
-                )
-            }
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                item {
-                    PostItFilterChip(
-                        selected = onlyLowStock,
-                        onClick = { viewModel.filterOnlyLowStock.value = !onlyLowStock },
-                        text = stringResource(R.string.pantry_filter_low),
-                        selectedColor = PostItPeach,
-                        modifier = Modifier.testTag("filter_low_stock")
-                    )
-                }
-
-                items(categories) { cat ->
-                    val color = when (cat) {
-                        "Todas" -> PostItYellow
-                        "Despensa", "Verduras" -> PostItMint
-                        "Carnes" -> PostItPeach
-                        "Lácteos" -> PostItSky
-                        else -> PostItYellow
                     }
-                    PostItFilterChip(
-                        selected = selectedCategory == cat,
-                        onClick = { viewModel.selectedPantryCategory.value = cat },
-                        text = LocalizedLabels.pantryCategory(context, cat),
-                        selectedColor = color
-                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.pantrySearchQuery.value = it },
+                            placeholder = {
+                                Text(
+                                    stringResource(R.string.pantry_search_hint),
+                                    fontFamily = PatrickHandFontFamily,
+                                    fontSize = 17.sp
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotBlank()) {
+                                    IconButton(onClick = { viewModel.pantrySearchQuery.value = "" }) {
+                                        Icon(
+                                            Icons.Default.Clear,
+                                            contentDescription = stringResource(R.string.action_clear),
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .sketchedBorder(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    strokeWidthDp = 1.2f
+                                )
+                                .testTag("pantry_search_field"),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        PostItButton(
+                            text = stringResource(R.string.pantry_sync_btn),
+                            icon = Icons.Default.Sync,
+                            onClick = { showShareDialog = true },
+                            backgroundColor = PostItSky,
+                            rotationDegrees = 1f,
+                            fontSize = 18.sp,
+                            modifier = Modifier.testTag("share_inventory_button")
+                        )
+                    }
+
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        item {
+                            PostItFilterChip(
+                                selected = onlyLowStock,
+                                onClick = { viewModel.filterOnlyLowStock.value = !onlyLowStock },
+                                text = stringResource(R.string.pantry_filter_low),
+                                selectedColor = PostItPeach,
+                                modifier = Modifier.testTag("filter_low_stock")
+                            )
+                        }
+
+                        items(categories) { cat ->
+                            val color = when (cat) {
+                                "Todas" -> PostItYellow
+                                "Despensa", "Verduras" -> PostItMint
+                                "Carnes" -> PostItPeach
+                                "Lácteos" -> PostItSky
+                                else -> PostItYellow
+                            }
+                            PostItFilterChip(
+                                selected = selectedCategory == cat,
+                                onClick = { viewModel.selectedPantryCategory.value = cat },
+                                text = LocalizedLabels.pantryCategory(context, cat),
+                                selectedColor = color
+                            )
+                        }
+                    }
                 }
             }
 
             when (val state = pantryUiState) {
                 is UiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-                is UiState.Error -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
+                    item(key = "pantry_loading") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .sketchedBorder(color = MaterialTheme.colorScheme.error, strokeWidthDp = 2f)
-                                .padding(16.dp)
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = stringResource(R.string.pantry_load_error),
-                                    fontFamily = CaveatFontFamily,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = state.message,
-                                    fontFamily = PatrickHandFontFamily,
-                                    fontSize = 16.sp,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                PostItButton(
-                                    text = stringResource(R.string.action_retry_sync),
-                                    onClick = { viewModel.retryCloudSync() },
-                                    backgroundColor = PostItYellow,
-                                    fontSize = 18.sp,
-                                    modifier = Modifier.testTag("reset_db_pantry")
-                                )
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+                is UiState.Error -> {
+                    item(key = "pantry_error") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .sketchedBorder(color = MaterialTheme.colorScheme.error, strokeWidthDp = 2f)
+                                    .padding(16.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = stringResource(R.string.pantry_load_error),
+                                        fontFamily = CaveatFontFamily,
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = state.message,
+                                        fontFamily = PatrickHandFontFamily,
+                                        fontSize = 16.sp,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    PostItButton(
+                                        text = stringResource(R.string.action_retry_sync),
+                                        onClick = { viewModel.retryCloudSync() },
+                                        backgroundColor = PostItYellow,
+                                        fontSize = 18.sp,
+                                        modifier = Modifier.testTag("reset_db_pantry")
+                                    )
+                                }
                             }
                         }
                     }
@@ -263,27 +298,42 @@ fun PantryScreen(
                     }
 
                     if (allItems.isNotEmpty()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                val restockSource = stringResource(R.string.pantry_restock_source)
-                                val totalInventoryValue = allItems.sumOf { it.quantity * it.unitCost }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                        item(key = "pantry_summary_card") {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        MetricPill(label = stringResource(R.string.pantry_metric_total), value = "${allItems.size}", color = MaterialTheme.colorScheme.primary)
-                                        MetricPill(label = stringResource(R.string.pantry_metric_low), value = "${lowStockItems.size - outOfStockItems.size}", color = StockYellow)
-                                        MetricPill(label = stringResource(R.string.pantry_metric_out), value = "${outOfStockItems.size}", color = StockRed)
+                                    val restockSource = stringResource(R.string.pantry_restock_source)
+                                    val totalInventoryValue = allItems.sumOf { it.quantity * it.unitCost }
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        MetricPill(
+                                            label = stringResource(R.string.pantry_metric_total),
+                                            value = "${allItems.size}",
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        MetricPill(
+                                            label = stringResource(R.string.pantry_metric_low),
+                                            value = "${lowStockItems.size - outOfStockItems.size}",
+                                            color = StockYellow
+                                        )
+                                        MetricPill(
+                                            label = stringResource(R.string.pantry_metric_out),
+                                            value = "${outOfStockItems.size}",
+                                            color = StockRed
+                                        )
                                         if (totalInventoryValue > 0.0) {
                                             MetricPill(
                                                 label = stringResource(R.string.pantry_metric_value),
@@ -329,68 +379,70 @@ fun PantryScreen(
                     }
 
                     if (filtered.isEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Inventory2,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = when {
-                                    onlyLowStock -> stringResource(R.string.pantry_empty_low_title)
-                                    searchQuery.isNotBlank() -> stringResource(R.string.pantry_empty_search_title)
-                                    else -> stringResource(R.string.pantry_empty_title)
-                                },
-                                fontFamily = CaveatFontFamily,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = when {
-                                    onlyLowStock -> stringResource(R.string.pantry_empty_low_sub)
-                                    searchQuery.isNotBlank() -> stringResource(R.string.pantry_empty_search_sub)
-                                    else -> stringResource(R.string.pantry_empty_sub)
-                                },
-                                fontFamily = PatrickHandFontFamily,
-                                fontSize = 17.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                PostItButton(
-                                    text = stringResource(R.string.pantry_add_btn),
-                                    onClick = onAddNewItem,
-                                    backgroundColor = PostItYellow,
-                                    fontSize = 18.sp,
-                                    modifier = Modifier.testTag("empty_pantry_add_button")
+                        item(key = "pantry_empty_state") {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Inventory2,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
-                                PostItButton(
-                                    text = stringResource(R.string.pantry_receive_btn),
-                                    icon = Icons.Default.Sync,
-                                    onClick = { showShareDialog = true },
-                                    backgroundColor = PostItMint,
-                                    fontSize = 18.sp
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = when {
+                                        onlyLowStock -> stringResource(R.string.pantry_empty_low_title)
+                                        searchQuery.isNotBlank() -> stringResource(R.string.pantry_empty_search_title)
+                                        else -> stringResource(R.string.pantry_empty_title)
+                                    },
+                                    fontFamily = CaveatFontFamily,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center
                                 )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = when {
+                                        onlyLowStock -> stringResource(R.string.pantry_empty_low_sub)
+                                        searchQuery.isNotBlank() -> stringResource(R.string.pantry_empty_search_sub)
+                                        else -> stringResource(R.string.pantry_empty_sub)
+                                    },
+                                    fontFamily = PatrickHandFontFamily,
+                                    fontSize = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    PostItButton(
+                                        text = stringResource(R.string.pantry_add_btn),
+                                        onClick = onAddNewItem,
+                                        backgroundColor = PostItYellow,
+                                        fontSize = 18.sp,
+                                        modifier = Modifier.testTag("empty_pantry_add_button")
+                                    )
+                                    PostItButton(
+                                        text = stringResource(R.string.pantry_receive_btn),
+                                        icon = Icons.Default.Sync,
+                                        onClick = { showShareDialog = true },
+                                        backgroundColor = PostItMint,
+                                        fontSize = 18.sp
+                                    )
+                                }
                             }
                         }
                     } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filtered, key = { it.id }) { item ->
+                        items(filtered, key = { it.id }) { item ->
+                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                                 PantryItemCard(
                                     item = item,
                                     currency = currency,

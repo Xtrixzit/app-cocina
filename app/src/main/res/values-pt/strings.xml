@@ -886,4 +886,14 @@
     <string name="ai_doc_csv_type_recipe">Receita</string>
     <string name="ai_doc_csv_unit_servings">porções</string>
     <string name="url_https_only_error">Insira uma URL segura que comece com https://</string>
+
+    <!-- Main Dashboard Empty State -->
+    <string name="dashboard_empty_badge">100% com seus dados</string>
+    <string name="dashboard_empty_title">Sua cozinha começa do zero</string>
+    <string name="dashboard_empty_subtitle">Você ainda não adicionou receitas nem itens na despensa. Registre seus pratos, categorias, custos e lucros reais para começar.</string>
+    <string name="dashboard_empty_step1">1. Crie sua primeira receita (Sobremesas, Pão, Refeições, Café ou personalizada)</string>
+    <string name="dashboard_empty_step2">2. Cadastre seus ingredientes, estoque e preços reais na Despensa</string>
+    <string name="dashboard_empty_step3">3. Calcule custos por porção, margem e lotes sem valores supostos</string>
+    <string name="dashboard_empty_cta_recipe">Registrar minha primeira receita</string>
+    <string name="dashboard_empty_cta_pantry">Ir para Despensa</string>
 </resources>

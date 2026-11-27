@@ -33,6 +33,7 @@ import com.example.data.sync.FullBackupManager
 import com.example.settings.AppSettingsPreferences
 import com.example.settings.CurrencyOption
 import com.example.ui.MainViewModel
+import com.example.ui.UiState
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.CookingAssistantScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -59,8 +60,16 @@ import com.example.ai.RecipePhotoGenState
 import com.example.ai.RecipePhotoGenerator
 import com.example.data.sync.AiReadableExportFormatter
 import com.example.settings.DriveSyncInfo
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performScrollToIndex
 import com.example.ui.components.GuidedTutorialOverlay
 import com.example.ui.components.NotebookBottomBar
+import com.example.ui.components.TabBackgroundColorKey
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextReplacement
 import com.example.data.model.DistributionConfig
@@ -73,8 +82,11 @@ import com.example.util.UpdateNotificationHelper
 import com.example.ui.components.DrivePermissionPromptDialog
 import com.example.ui.screens.ChefChatDialog
 import com.example.ui.screens.PantryFormDialog
+import com.example.ui.screens.PantryScreen
 import com.example.ui.screens.ProductionScreen
 import com.example.ui.screens.RecipeFormDialog
+import com.example.ui.screens.RecipesScreen
+import com.example.ui.screens.ShoppingListScreen
 import com.example.util.ImageUtils
 import com.example.util.SampleContentLocalizer
 import com.example.util.SecurityUtils
@@ -1465,6 +1477,17 @@ class ExampleRobolectricTest {
             ghConfig.updateUrl
         )
 
+        val rootContentsJson = """
+            [
+              {"name": "README.md", "download_url": "https://raw.githubusercontent.com/Xtrixzit/app-cocina/main/README.md"},
+              {"name": "Recetario.apk", "download_url": "https://raw.githubusercontent.com/Xtrixzit/app-cocina/main/Recetario.apk"}
+            ]
+        """.trimIndent()
+        assertEquals(
+            "https://raw.githubusercontent.com/Xtrixzit/app-cocina/main/Recetario.apk",
+            GitHubUpdateChecker.parseApkUrlFromContentsArray(rootContentsJson)
+        )
+
         var grantClicked = false
         composeRule.setContent {
             MyApplicationTheme {
@@ -1840,16 +1863,18 @@ class ExampleRobolectricTest {
     @Test
     fun `recipeFormDialog starts blank without preset category or servings and accepts custom categories`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        AppSettingsPreferences.setLanguageCode(context, "es")
         var savedRecipe: Recipe? = null
+        val formInstanceKey = androidx.compose.runtime.mutableIntStateOf(0)
 
         composeRule.setContent {
             MyApplicationTheme {
-                RecipeFormDialog(
-                    initialRecipe = null,
-                    onDismiss = {},
-                    onSave = { savedRecipe = it }
-                )
+                androidx.compose.runtime.key(formInstanceKey.intValue) {
+                    RecipeFormDialog(
+                        initialRecipe = null,
+                        onDismiss = {},
+                        onSave = { savedRecipe = it }
+                    )
+                }
             }
         }
 
@@ -1865,26 +1890,23 @@ class ExampleRobolectricTest {
         assertEquals(0, savedRecipe!!.cookTimeMinutes)
         assertTrue(savedRecipe!!.ingredients.isEmpty())
 
-        // Verify custom category entry saves cleanly
+        // Verify custom category entry saves cleanly on fresh form instance
         savedRecipe = null
-        composeRule.setContent {
-            MyApplicationTheme {
-                RecipeFormDialog(
-                    initialRecipe = null,
-                    onDismiss = {},
-                    onSave = { savedRecipe = it }
-                )
-            }
+        composeRule.runOnUiThread {
+            formInstanceKey.intValue++
         }
+        composeRule.waitForIdle()
+
         composeRule.onNodeWithTag("recipe_form_title").performTextInput("Pan Rustico")
         composeRule.onNodeWithTag("recipe_form_category_dropdown").performScrollTo().performClick()
-        composeRule.onNodeWithText("Otra categoría").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("recipe_form_cat_option_custom").performScrollTo().performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("recipe_form_custom_category").performScrollTo().performTextInput("Meriendas")
         composeRule.onNodeWithTag("recipe_form_save").performClick()
 
         assertNotNull(savedRecipe)
         assertEquals("Meriendas", savedRecipe!!.category)
-        AppSettingsPreferences.setLanguageCode(context, "")
     }
 
     @Test
@@ -1916,7 +1938,6 @@ class ExampleRobolectricTest {
         if (FirebaseApp.getApps(context).isEmpty()) {
             FirebaseApp.initializeApp(context)
         }
-        AppSettingsPreferences.setLanguageCode(context, "es")
         AppSettingsPreferences.setCurrency(context, CurrencyOption.USD)
         AppSettingsPreferences.setMarginPercent(context, 0)
         SessionPreferences.setGuestMode(context, true)
@@ -1933,24 +1954,6 @@ class ExampleRobolectricTest {
             servings = 2,
             ingredients = listOf(RecipeIngredient(name = "Lechuga", amount = 100.0, unit = "g"))
         )
-
-        composeRule.setContent {
-            MyApplicationTheme {
-                ProductionScreen(
-                    viewModel = viewModel,
-                    recipes = listOf(noCostRecipe),
-                    pantryItems = emptyList(),
-                    initialSelectedRecipe = noCostRecipe
-                )
-            }
-        }
-
-        val noCostsLabel = LocaleHelper.localizedContext(context).getString(R.string.prod_no_costs_entered)
-        composeRule.onNodeWithTag("production_lazy_list")
-            .performScrollToNode(hasText(noCostsLabel))
-        composeRule.onNodeWithText(noCostsLabel).assertIsDisplayed()
-
-        // Enter margin inline when recipe has a manual cost
         val pricedRecipe = Recipe(
             id = "r_priced",
             title = "Pan Base",
@@ -1958,19 +1961,33 @@ class ExampleRobolectricTest {
             servings = 4,
             ingredients = listOf(RecipeIngredient(name = "Harina", amount = 500.0, unit = "g", manualUnitCost = 0.004))
         )
+        val currentRecipeState = androidx.compose.runtime.mutableStateOf(noCostRecipe)
+
         composeRule.setContent {
             MyApplicationTheme {
-                ProductionScreen(
-                    viewModel = viewModel,
-                    recipes = listOf(pricedRecipe),
-                    pantryItems = emptyList(),
-                    initialSelectedRecipe = pricedRecipe
-                )
+                androidx.compose.runtime.key(currentRecipeState.value.id) {
+                    ProductionScreen(
+                        viewModel = viewModel,
+                        recipes = listOf(noCostRecipe, pricedRecipe),
+                        pantryItems = emptyList(),
+                        initialSelectedRecipe = currentRecipeState.value
+                    )
+                }
             }
         }
 
-        // Total cost = $2.00, margin = 0% -> prompt for margin instead of assumed +30%
-        val noMarginLabel = LocaleHelper.localizedContext(context).getString(R.string.prod_no_margin_entered)
+        val noCostsLabel = context.getString(R.string.prod_no_costs_entered)
+        composeRule.onNodeWithTag("production_lazy_list")
+            .performScrollToNode(hasText(noCostsLabel))
+        composeRule.onNodeWithText(noCostsLabel).assertIsDisplayed()
+
+        // Switch to a recipe with entered cost and verify 0% margin prompts without assumed +30%
+        composeRule.runOnUiThread {
+            currentRecipeState.value = pricedRecipe
+        }
+        composeRule.waitForIdle()
+
+        val noMarginLabel = context.getString(R.string.prod_no_margin_entered)
         composeRule.onNodeWithTag("production_lazy_list")
             .performScrollToNode(hasText(noMarginLabel))
         composeRule.onNodeWithText(noMarginLabel).assertIsDisplayed()
@@ -1983,6 +2000,242 @@ class ExampleRobolectricTest {
         composeRule.onNodeWithText("$3.00", substring = true).assertIsDisplayed()
 
         AppSettingsPreferences.setMarginPercent(context, 0)
+        SessionPreferences.setGuestMode(context, false)
+    }
+
+    @Test
+    fun `recipesDashboard shows dedicated empty state with first recipe CTA when recipes and pantry are both empty`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        SessionPreferences.setGuestMode(context, true)
+        CookingDatabase.resetDatabase(context)
+
+        val repo = CookingRepository(context)
+        val viewModel = MainViewModel(
+            repository = repo,
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+
+        var addRecipeClicked = false
+        var goToPantryClicked = false
+        composeRule.setContent {
+            MyApplicationTheme {
+                RecipesScreen(
+                    viewModel = viewModel,
+                    pantryItems = emptyList(),
+                    onSelectRecipe = {},
+                    onAddNewRecipe = { addRecipeClicked = true },
+                    onNavigateToPantry = { goToPantryClicked = true }
+                )
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("dashboard_empty_state").assertIsDisplayed()
+        composeRule.onNodeWithTag("recipe_search_field").assertDoesNotExist()
+        composeRule.onNodeWithTag("dashboard_empty_add_recipe_cta")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        assertTrue(addRecipeClicked)
+
+        composeRule.onNodeWithTag("dashboard_empty_go_pantry_cta")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        assertTrue(goToPantryClicked)
+
+        CookingDatabase.resetDatabase(context)
+        AppSettingsPreferences.setLanguageCode(context, "")
+        SessionPreferences.setGuestMode(context, false)
+        Unit
+    }
+
+    @Test
+    fun `recipesDashboard hides full empty state when pantry has items and shows search and recipe CTA`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        SessionPreferences.setGuestMode(context, true)
+        CookingDatabase.resetDatabase(context)
+
+        val repo = CookingRepository(context)
+        val pantrySample = PantryItem(id = "p_1", name = "Harina", quantity = 1.0, unit = "kg")
+        repo.savePantryItem(CookingRepository.GUEST_USER_ID, pantrySample, isGuestMode = true)
+
+        val viewModel = MainViewModel(
+            repository = repo,
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+
+        var addRecipeClicked = false
+        composeRule.setContent {
+            MyApplicationTheme {
+                RecipesScreen(
+                    viewModel = viewModel,
+                    pantryItems = listOf(pantrySample),
+                    onSelectRecipe = {},
+                    onAddNewRecipe = { addRecipeClicked = true }
+                )
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("dashboard_empty_state").assertDoesNotExist()
+        composeRule.onNodeWithTag("recipe_search_field").assertIsDisplayed()
+        composeRule.onNodeWithTag("recipes_empty_add_recipe_cta")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .performClick()
+        assertTrue(addRecipeClicked)
+
+        CookingDatabase.resetDatabase(context)
+        AppSettingsPreferences.setLanguageCode(context, "")
+        SessionPreferences.setGuestMode(context, false)
+        Unit
+    }
+
+    @Test
+    fun `notebookBottomBar keeps distinct pastel background colors when clicked across all tabs`() {
+        var selectedBottomTab by mutableStateOf(0)
+        composeRule.setContent {
+            MyApplicationTheme {
+                NotebookBottomBar(
+                    selectedTab = selectedBottomTab,
+                    onTabSelected = { selectedBottomTab = it },
+                    pendingShoppingCount = 2
+                )
+            }
+        }
+
+        val tabTags = listOf("tab_recipes", "tab_pantry", "tab_shopping", "tab_production", "tab_assistant")
+        val seenActiveColors = mutableSetOf<Color>()
+        val seenInactiveColors = mutableSetOf<Color>()
+
+        tabTags.forEachIndexed { targetIdx, targetTag ->
+            composeRule.onNodeWithTag(targetTag).performClick()
+            composeRule.waitForIdle()
+            assertEquals(targetIdx, selectedBottomTab)
+            composeRule.onNodeWithTag(targetTag).assertIsSelected()
+
+            tabTags.forEachIndexed { idx, tag ->
+                val node = composeRule.onNodeWithTag(tag).fetchSemanticsNode()
+                val bgColor = node.config[TabBackgroundColorKey]
+                assertTrue("Tab $tag should keep a non-transparent solid pastel background", bgColor != Color.Unspecified && bgColor != Color.Transparent && bgColor.alpha > 0.9f)
+                if (idx == targetIdx) {
+                    seenActiveColors.add(bgColor)
+                } else {
+                    composeRule.onNodeWithTag(tag).assertIsNotSelected()
+                    seenInactiveColors.add(bgColor)
+                }
+            }
+        }
+        assertEquals(5, seenActiveColors.size)
+        assertEquals(5, seenInactiveColors.size)
+    }
+
+    @Test
+    fun `pantry shopping production and assistant sections scroll smoothly across items`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        SessionPreferences.setGuestMode(context, true)
+        CookingDatabase.resetDatabase(context)
+
+        val repo = CookingRepository(context)
+        val manyPantry = (1..12).map { i ->
+            PantryItem(id = "p_$i", name = "Ingrediente $i", quantity = 2.0, minQuantity = 1.0, unit = "kg")
+        }
+        val manyShopping = (1..12).map { i ->
+            ShoppingItem(id = "s_$i", name = "Compra $i", quantity = 3.0, unit = "unidades", isPurchased = false)
+        }
+        val manyRecipes = (1..10).map { i ->
+            Recipe(
+                id = "r_$i",
+                title = "Receta Prueba $i",
+                category = "Comidas",
+                servings = 4,
+                ingredients = listOf(RecipeIngredient(name = "Ingrediente 1", amount = 1.0, unit = "kg"))
+            )
+        }
+        runBlocking {
+            manyPantry.forEach { repo.savePantryItem(CookingRepository.GUEST_USER_ID, it, isGuestMode = true) }
+            manyShopping.forEach { repo.saveShoppingItem(CookingRepository.GUEST_USER_ID, it, isGuestMode = true, syncToPantry = false) }
+            manyRecipes.forEach { repo.saveRecipe(CookingRepository.GUEST_USER_ID, it, isGuestMode = true) }
+        }
+
+        val viewModel = MainViewModel(
+            repository = repo,
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+
+        var section by mutableStateOf(0)
+        composeRule.setContent {
+            MyApplicationTheme {
+                when (section) {
+                    0 -> PantryScreen(viewModel = viewModel, onAddNewItem = {})
+                    1 -> ShoppingListScreen(viewModel = viewModel, pantryItems = manyPantry)
+                    2 -> ProductionScreen(viewModel = viewModel, recipes = manyRecipes, pantryItems = manyPantry)
+                    else -> CookingAssistantScreen(viewModel = viewModel, recipes = manyRecipes, pantryItems = manyPantry, onSelectRecipe = {})
+                }
+            }
+        }
+
+        fun waitUntilStateLoaded(predicate: () -> Boolean) {
+            val deadline = System.currentTimeMillis() + 8_000L
+            while (!predicate() && System.currentTimeMillis() < deadline) {
+                org.robolectric.shadows.ShadowLooper.idleMainLooper()
+                composeRule.waitForIdle()
+                Thread.sleep(25)
+            }
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            composeRule.waitForIdle()
+        }
+
+        waitUntilStateLoaded { viewModel.pantryState.value !is UiState.Loading }
+        val resolvedPantryState = viewModel.pantryState.value
+        assertTrue("Expected UiState.Success with items, got $resolvedPantryState", resolvedPantryState is UiState.Success && resolvedPantryState.data.size == 12)
+        composeRule.onNodeWithTag("pantry_lazy_list").performScrollToNode(hasTestTag("pantry_item_p_1"))
+        composeRule.onNodeWithText("Ingrediente 1").assertIsDisplayed()
+        composeRule.onNodeWithTag("pantry_lazy_list").performScrollToNode(hasTestTag("pantry_item_p_9"))
+        composeRule.onNodeWithText("Ingrediente 9").assertIsDisplayed()
+
+        composeRule.runOnUiThread { section = 1 }
+        composeRule.waitForIdle()
+        waitUntilStateLoaded { viewModel.shoppingState.value !is UiState.Loading }
+        val resolvedShoppingState = viewModel.shoppingState.value
+        assertTrue("Expected UiState.Success with items, got $resolvedShoppingState", resolvedShoppingState is UiState.Success && resolvedShoppingState.data.size == 12)
+        composeRule.onNodeWithTag("shopping_lazy_list").performScrollToNode(hasTestTag("shopping_item_s_1"))
+        composeRule.onNodeWithText("Compra 1").assertIsDisplayed()
+        composeRule.onNodeWithTag("shopping_lazy_list").performScrollToNode(hasTestTag("shopping_item_s_12"))
+        composeRule.onNodeWithText("Compra 12").assertIsDisplayed()
+
+        composeRule.runOnUiThread { section = 2 }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("production_picker_list").performScrollToNode(hasTestTag("production_recipe_item_r_10"))
+        composeRule.onNodeWithTag("production_recipe_item_r_10").assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("production_lazy_list").performScrollToIndex(3)
+
+        composeRule.runOnUiThread { section = 3 }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("cooking_assistant_list").performScrollToNode(hasTestTag("assistant_recipe_r_10"))
+        composeRule.onNodeWithTag("assistant_recipe_r_10").assertIsDisplayed()
+
+        CookingDatabase.resetDatabase(context)
         AppSettingsPreferences.setLanguageCode(context, "")
         SessionPreferences.setGuestMode(context, false)
     }

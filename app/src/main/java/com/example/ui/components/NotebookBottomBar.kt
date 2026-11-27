@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -23,19 +25,24 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -46,6 +53,9 @@ import com.example.ui.theme.PostItPeach
 import com.example.ui.theme.PostItPink
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
+
+val TabBackgroundColorKey = SemanticsPropertyKey<Color>("TabBackgroundColor")
+var SemanticsPropertyReceiver.tabBackgroundColor by TabBackgroundColorKey
 
 data class NotebookTabItem(
     val title: String,
@@ -108,6 +118,7 @@ fun NotebookBottomBar(
 
     val binderBorderColor = Color(0xFFD6D3D1)
     val bottomBgColor = Color(0xFFF5F0E6)
+    val tabShape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
 
     Column(
         modifier = modifier
@@ -122,105 +133,124 @@ fun NotebookBottomBar(
             }
             .background(bottomBgColor)
             .navigationBarsPadding()
-            .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)
+            .padding(start = 6.dp, end = 6.dp, top = 12.dp, bottom = 6.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .heightIn(min = 70.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             tabs.forEachIndexed { index, tab ->
                 val isSelected = selectedTab == index
                 val elevationDp by animateDpAsState(
-                    targetValue = if (isSelected) 6.dp else 2.dp,
+                    targetValue = if (isSelected) 5.dp else 1.5.dp,
                     animationSpec = spring(),
                     label = "tabElevation"
                 )
                 val offsetY by animateDpAsState(
-                    targetValue = if (isSelected) (-6).dp else 0.dp,
+                    targetValue = if (isSelected) (-5).dp else 0.dp,
                     animationSpec = spring(),
                     label = "tabOffsetY"
                 )
-
-                val tabBackground = if (isSelected) tab.activeColor else tab.inactiveColor
+                val targetBg = if (isSelected) tab.activeColor else tab.inactiveColor
+                val animatedBg by animateColorAsState(
+                    targetValue = targetBg,
+                    label = "tabBgColor"
+                )
                 val inkColor = if (isSelected) Color(0xFF18181B) else tab.accentInkColor
                 val borderInk = if (isSelected) Color(0xFF1C1917) else Color(0xFF44403C)
+                val (interactionSource, pressScale) = rememberStampPressState()
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .offset(y = offsetY)
-                        .shadow(
-                            elevation = elevationDp,
-                            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 2.dp, bottomEnd = 2.dp),
-                            spotColor = Color(0x33000000)
-                        )
-                        .background(
-                            color = tabBackground,
-                            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
-                        )
-                        .sketchedBorder(
-                            color = borderInk,
-                            strokeWidthDp = if (isSelected) 2.2f else 1.4f,
-                            cornerRadiusDp = 10f
-                        )
-                        .stampClickable(onClick = { onTabSelected(index) })
-                        .tutorialTarget(tab.testTag)
-                        .testTag(tab.testTag)
-                        .padding(horizontal = 4.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
+                        .graphicsLayer {
+                            scaleX = pressScale
+                            scaleY = pressScale
+                        }
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(contentAlignment = Alignment.TopEnd) {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.title,
-                                tint = inkColor,
-                                modifier = Modifier.size(if (isSelected) 22.dp else 20.dp)
+                    Surface(
+                        selected = isSelected,
+                        onClick = { onTabSelected(index) },
+                        interactionSource = interactionSource,
+                        shape = tabShape,
+                        color = animatedBg,
+                        contentColor = inkColor,
+                        tonalElevation = 0.dp,
+                        shadowElevation = elevationDp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
+                            .sketchedBorder(
+                                color = borderInk,
+                                strokeWidthDp = if (isSelected) 2.2f else 1.4f,
+                                cornerRadiusDp = 10f
                             )
+                            .semantics { tabBackgroundColor = targetBg }
+                            .tutorialTarget(tab.testTag)
+                            .testTag(tab.testTag)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 7.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(contentAlignment = Alignment.TopEnd) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = tab.title,
+                                    tint = inkColor,
+                                    modifier = Modifier.size(if (isSelected) 22.dp else 20.dp)
+                                )
 
-                            if (index == 2 && pendingShoppingCount > 0) {
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = 10.dp, y = (-6).dp)
-                                        .size(17.dp)
-                                        .background(CrimsonMarker, CircleShape)
-                                        .sketchedBorder(color = Color(0xFF18181B), strokeWidthDp = 1f, cornerRadiusDp = 9f),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "$pendingShoppingCount",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                if (index == 2 && pendingShoppingCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(x = 10.dp, y = (-6).dp)
+                                            .size(17.dp)
+                                            .background(CrimsonMarker, CircleShape)
+                                            .sketchedBorder(
+                                                color = Color(0xFF18181B),
+                                                strokeWidthDp = 1f,
+                                                cornerRadiusDp = 9f
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$pendingShoppingCount",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
 
-                        Text(
-                            text = tab.title,
-                            fontFamily = CaveatFontFamily,
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                            fontSize = if (isSelected) 17.sp else 15.sp,
-                            color = inkColor,
-                            maxLines = 1
-                        )
-
-                        if (isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 1.dp)
-                                    .size(width = 30.dp, height = 2.5.dp)
-                                    .background(inkColor, RoundedCornerShape(1.dp))
+                            Text(
+                                text = tab.title,
+                                fontFamily = CaveatFontFamily,
+                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                fontSize = if (isSelected) 16.sp else 15.sp,
+                                color = inkColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 2.dp)
+                                        .size(width = 30.dp, height = 2.5.dp)
+                                        .background(inkColor, RoundedCornerShape(1.dp))
+                                )
+                            }
                         }
                     }
                 }

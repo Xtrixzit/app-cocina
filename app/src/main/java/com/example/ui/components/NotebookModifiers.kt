@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -30,13 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -159,28 +161,34 @@ fun Modifier.sketchedBorder(
     }
 }
 
+@Composable
+fun rememberStampPressState(): Pair<MutableInteractionSource, Float> {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 450f),
+        label = "stampScale"
+    )
+    return interactionSource to scale
+}
+
 /**
- * Bouncy stamp-press interaction animation for buttons.
+ * Tactile click modifier with subtle charcoal ink ripple.
  */
 @Composable
 fun Modifier.stampClickable(
     onClick: () -> Unit
 ): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
-        label = "stampScale"
+    return this.clickable(
+        interactionSource = interactionSource,
+        indication = ripple(
+            bounded = true,
+            color = CharcoalInk.copy(alpha = 0.14f)
+        ),
+        onClick = onClick
     )
-
-    return this
-        .scale(scale)
-        .clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onClick
-        )
 }
 
 /**
@@ -199,14 +207,21 @@ fun PostItButton(
     rotationDegrees: Float = 0f,
     showTape: Boolean = true,
     fontSize: TextUnit = 21.sp,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
     contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
 ) {
     val effectiveBorder = CharcoalInk.copy(alpha = 0.85f)
     val shadowColor = Color(0x33000000)
+    val (interactionSource, pressScale) = rememberStampPressState()
 
     Box(
         modifier = modifier
-            .rotate(rotationDegrees)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+                rotationZ = rotationDegrees
+            }
             .shadow(
                 elevation = 3.dp,
                 shape = RoundedCornerShape(3.dp),
@@ -215,7 +230,14 @@ fun PostItButton(
             )
             .background(backgroundColor, RoundedCornerShape(3.dp))
             .sketchedBorder(color = effectiveBorder, strokeWidthDp = 1.8f)
-            .stampClickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = CharcoalInk.copy(alpha = 0.14f)
+                ),
+                onClick = onClick
+            )
             .padding(contentPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -249,7 +271,9 @@ fun PostItButton(
                 fontFamily = CaveatFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = fontSize,
-                color = textColor
+                color = textColor,
+                maxLines = maxLines,
+                overflow = overflow
             )
         }
     }
@@ -273,10 +297,15 @@ fun PostItFilterChip(
     } else {
         Triple(Color(0xFFFBF8F0), CharcoalInk.copy(alpha = 0.75f), CharcoalInk.copy(alpha = 0.35f))
     }
+    val (interactionSource, pressScale) = rememberStampPressState()
 
     Box(
         modifier = modifier
-            .rotate(rotationDegrees)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+                rotationZ = rotationDegrees
+            }
             .shadow(
                 elevation = if (selected) 3.dp else 1.dp,
                 shape = RoundedCornerShape(3.dp)
@@ -286,7 +315,14 @@ fun PostItFilterChip(
                 color = strokeColor,
                 strokeWidthDp = if (selected) 2f else 1.2f
             )
-            .stampClickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = CharcoalInk.copy(alpha = 0.14f)
+                ),
+                onClick = onClick
+            )
             .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -365,14 +401,26 @@ fun NotebookBackStamp(
     val innerDiscColor = Color(0xFFFDE68A)
     val arrowTintColor = Color(0xFF8B1E1E)
     val borderColor = Color(0xFF18181B)
+    val (interactionSource, pressScale) = rememberStampPressState()
 
     Box(
         modifier = modifier
             .size(46.dp)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .shadow(elevation = 3.dp, shape = CircleShape)
             .background(outerRingColor, CircleShape)
             .sketchedBorder(color = borderColor, strokeWidthDp = 1.6f, cornerRadiusDp = 23f)
-            .stampClickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(
+                    bounded = true,
+                    color = Color.White.copy(alpha = 0.2f)
+                ),
+                onClick = onClick
+            )
             .padding(4.dp),
         contentAlignment = Alignment.Center
     ) {

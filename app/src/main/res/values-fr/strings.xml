@@ -886,4 +886,14 @@
     <string name="ai_doc_csv_type_recipe">Recette</string>
     <string name="ai_doc_csv_unit_servings">portions</string>
     <string name="url_https_only_error">Saisissez une URL sécurisée commençant par https://</string>
+
+    <!-- Main Dashboard Empty State -->
+    <string name="dashboard_empty_badge">100% vos données</string>
+    <string name="dashboard_empty_title">Votre cuisine part de zéro</string>
+    <string name="dashboard_empty_subtitle">Vous n\'avez pas encore ajouté de recettes ni de garde-manger. Enregistrez vos plats, catégories, coûts et marges réels pour commencer.</string>
+    <string name="dashboard_empty_step1">1. Créez votre première recette (Desserts, Pain, Repas, Petit-déj ou libre)</string>
+    <string name="dashboard_empty_step2">2. Ajoutez vos ingrédients, stocks et prix réels dans Garde-manger</string>
+    <string name="dashboard_empty_step3">3. Calculez coûts par portion, marges et fournées sans chiffres supposés</string>
+    <string name="dashboard_empty_cta_recipe">Enregistrer ma première recette</string>
+    <string name="dashboard_empty_cta_pantry">Aller au Garde-manger</string>
 </resources>
