@@ -896,4 +896,17 @@
     <string name="dashboard_empty_step3">3. Calcule custos por porção, margem e lotes sem valores supostos</string>
     <string name="dashboard_empty_cta_recipe">Registrar minha primeira receita</string>
     <string name="dashboard_empty_cta_pantry">Ir para Despensa</string>
+
+    <!-- Recipe Categories Picker & Manager -->
+    <string name="recipe_form_cat_new_chip">+ Nova</string>
+    <string name="recipe_form_cat_add_btn">Adicionar</string>
+    <string name="recipe_form_cat_optional_hint">Toque em uma categoria para escolher ou crie as suas</string>
+    <string name="recipe_form_cat_clear_cd">Limpar categoria</string>
+    <string name="recipe_form_cat_remove_cd">Excluir categoria personalizada</string>
+    <string name="recipes_manage_categories_chip">+ Categoria</string>
+    <string name="manage_categories_title">Categorias de receitas</string>
+    <string name="manage_categories_subtitle">Crie suas próprias categorias (Confeitaria, Padaria, Menu semanal…) para organizar e filtrar suas receitas.</string>
+    <string name="manage_categories_custom_section">Suas categorias personalizadas</string>
+    <string name="manage_categories_empty_custom">Você ainda não criou categorias personalizadas. Adicione uma acima para reutilizá-la.</string>
+    <string name="manage_categories_base_section">Categorias incluídas</string>
 </resources>

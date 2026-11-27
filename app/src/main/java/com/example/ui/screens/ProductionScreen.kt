@@ -101,6 +101,7 @@ import com.example.ui.theme.StockGreen
 import com.example.ui.theme.StockRed
 import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
+import com.example.util.RecipeCategories
 import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 import java.text.SimpleDateFormat
@@ -143,14 +144,10 @@ fun ProductionScreen(
 
     var showDeductConfirmDialog by remember { mutableStateOf(false) }
 
-    val baseCategories = listOf("Todas", "Desayunos", "Almuerzos", "Comidas", "Cenas", "Pan", "Postres", "Snacks", "Bebidas", "Sopas")
-    val customCategories = remember(recipes) {
-        recipes
-            .map { it.category.trim() }
-            .filter { cat -> cat.isNotBlank() && baseCategories.none { it.equals(cat, ignoreCase = true) } }
-            .distinctBy { it.lowercase() }
+    val customSavedCategories by AppSettingsPreferences.observeCustomRecipeCategories(context).collectAsStateWithLifecycle()
+    val categories = remember(customSavedCategories, recipes) {
+        RecipeCategories.mergeFilterCategories(customSavedCategories, recipes)
     }
-    val categories = baseCategories + customCategories
 
     BackHandler(enabled = selectedRecipe != null) {
         selectedRecipe = null

@@ -40,12 +40,22 @@ object UpdateNotificationHelper {
         }
     }
 
+    fun cancelUpdateNotification(context: Context) {
+        try {
+            NotificationManagerCompat.from(context.applicationContext).cancel(NOTIFICATION_ID)
+        } catch (_: SecurityException) {
+        }
+    }
+
     fun notifyIfNewVersion(
         context: Context,
         remoteVersionCode: Int,
         remoteVersionName: String
     ) {
-        if (remoteVersionCode <= BuildConfig.VERSION_CODE) return
+        if (remoteVersionCode <= BuildConfig.VERSION_CODE) {
+            cancelUpdateNotification(context)
+            return
+        }
         if (AppSettingsPreferences.getLastNotifiedUpdateVersion(context) >= remoteVersionCode) return
 
         AppSettingsPreferences.setLastNotifiedUpdateVersion(context, remoteVersionCode)

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <include domain="database" path="cooking_pantry_database" />
-    <include domain="sharedpref" path="recetario_settings.xml" />
+    <exclude domain="database" path="cooking_pantry_database" />
+    <exclude domain="sharedpref" path="recetario_settings.xml" />
     <exclude domain="sharedpref" path="recetario_session.xml" />
 </full-backup-content>

@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,6 +42,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FormatListNumbered
@@ -85,6 +89,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,14 +109,19 @@ import com.example.settings.AppSettingsPreferences
 import com.example.ui.components.PostItButton
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
+import com.example.ui.theme.BlueprintNavy
 import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.CharcoalInk
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItPeach
+import com.example.ui.theme.PostItPink
+import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.ui.theme.StockGreen
 import com.example.util.ImageUtils
 import com.example.util.LocalizedLabels
+import com.example.util.RecipeCategories
 import com.example.util.SampleContentLocalizer
 import com.example.util.SecurityUtils
 import com.example.util.UnitConverter
@@ -124,6 +134,7 @@ import java.util.Locale
 fun RecipeFormDialog(
     initialRecipe: Recipe? = null,
     pantryItems: List<PantryItem> = emptyList(),
+    existingRecipeCategories: List<String> = emptyList(),
     photoGenState: RecipePhotoGenState = RecipePhotoGenState.Idle,
     onGenerateAiPhoto: (title: String, category: String, ingredients: List<RecipeIngredient>) -> Unit = { _, _, _ -> },
     onGenerateAiPhotoWithAspect: ((title: String, category: String, ingredients: List<RecipeIngredient>, aspectOption: PhotoAspectOption) -> Unit)? = null,
@@ -135,16 +146,15 @@ fun RecipeFormDialog(
     val context = LocalContext.current
     val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
     val marginPercent by AppSettingsPreferences.observeMarginPercent(context).collectAsStateWithLifecycle()
+    val customSavedCategories by AppSettingsPreferences.observeCustomRecipeCategories(context).collectAsStateWithLifecycle()
     val isEdit = initialRecipe != null
 
-    val baseCategories = listOf("Desayunos", "Almuerzos", "Comidas", "Cenas", "Pan", "Postres", "Snacks", "Bebidas", "Sopas")
-    val initialCat = initialRecipe?.category?.trim().orEmpty()
-    val initialIsCustomCat = initialCat.isNotBlank() && baseCategories.none { it.equals(initialCat, ignoreCase = true) }
+    val initialCat = RecipeCategories.resolveStoredValue(initialRecipe?.category.orEmpty())
 
     var title by remember { mutableStateOf(initialRecipe?.title ?: "") }
-    var category by remember { mutableStateOf(if (initialIsCustomCat) "" else initialCat) }
-    var isCustomCategory by remember { mutableStateOf(initialIsCustomCat) }
-    var customCategoryText by remember { mutableStateOf(if (initialIsCustomCat) initialCat else "") }
+    var category by remember { mutableStateOf(initialCat) }
+    var showCustomCategoryInput by remember { mutableStateOf(false) }
+    var customCategoryText by remember { mutableStateOf("") }
     var servingsText by remember {
         mutableStateOf(if (initialRecipe != null && initialRecipe.servings > 0) initialRecipe.servings.toString() else "")
     }
@@ -235,9 +245,27 @@ fun RecipeFormDialog(
         }
     }
 
-    val categories = baseCategories
+    val categories = remember(customSavedCategories, existingRecipeCategories, category) {
+        RecipeCategories.mergeSelectableCategories(
+            customCategories = customSavedCategories,
+            existingRecipeCategories = existingRecipeCategories,
+            selectedCategory = category
+        )
+    }
     val difficulties = listOf("Fácil", "Media", "Difícil")
     val units = UnitConverter.allRecipeUnits
+
+    fun applyCustomCategoryInput() {
+        val clean = customCategoryText.trim()
+        if (clean.isNotBlank()) {
+            val saved = AppSettingsPreferences.addCustomRecipeCategory(context, clean)
+            if (saved != null) {
+                category = saved
+            }
+            customCategoryText = ""
+            showCustomCategoryInput = false
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -283,10 +311,15 @@ fun RecipeFormDialog(
                                         instructions.filter { it.isNotBlank() }
                                     }
 
-                                    val resolvedCategory = if (isCustomCategory) {
-                                        customCategoryText.trim().take(50)
+                                    val pendingCustom = if (showCustomCategoryInput && customCategoryText.isNotBlank()) {
+                                        AppSettingsPreferences.addCustomRecipeCategory(context, customCategoryText)
+                                            ?: customCategoryText.trim().take(50)
                                     } else {
-                                        category.trim().take(50)
+                                        null
+                                    }
+                                    val resolvedCategory = (pendingCustom ?: category).trim().take(50)
+                                    if (resolvedCategory.isNotBlank() && !RecipeCategories.isBuiltInCategory(resolvedCategory)) {
+                                        AppSettingsPreferences.addCustomRecipeCategory(context, resolvedCategory)
                                     }
                                     val resolvedServings = (servingsText.trim().toIntOrNull() ?: 1).coerceIn(1, 500)
                                     val resolvedPrepTime = (prepTimeText.trim().toIntOrNull() ?: 0).coerceIn(0, 1440)
@@ -714,104 +747,262 @@ fun RecipeFormDialog(
                     singleLine = true
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    var catExpanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = catExpanded,
-                        onExpandedChange = { catExpanded = it },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
-                            value = if (isCustomCategory) {
-                                stringResource(R.string.cat_custom)
-                            } else if (category.isNotBlank()) {
-                                LocalizedLabels.recipeCategory(context, category)
-                            } else "",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(stringResource(R.string.recipe_form_cat_label)) },
-                            placeholder = { Text(stringResource(R.string.recipe_form_cat_select_hint)) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = catExpanded) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                                .fillMaxWidth()
-                                .testTag("recipe_form_category_dropdown")
+                // Improved Visual Category Picker & Custom Category Creator
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .sketchedBorder(
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                            strokeWidthDp = 1.4f,
+                            cornerRadiusDp = 12f
                         )
-                        ExposedDropdownMenu(
-                            expanded = catExpanded,
-                            onDismissRequest = { catExpanded = false }
+                        .testTag("recipe_form_category_section")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            categories.forEach { cat ->
-                                DropdownMenuItem(
-                                    text = { Text(LocalizedLabels.recipeCategory(context, cat)) },
-                                    onClick = {
-                                        isCustomCategory = false
-                                        category = cat
-                                        catExpanded = false
-                                    },
-                                    modifier = Modifier.testTag("recipe_form_cat_option_$cat")
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.recipe_form_cat_label),
+                                    fontFamily = CaveatFontFamily,
+                                    fontSize = 23.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BlueprintNavy
+                                )
+                                Text(
+                                    text = stringResource(R.string.recipe_form_cat_optional_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.cat_custom)) },
-                                onClick = {
-                                    isCustomCategory = true
-                                    catExpanded = false
-                                },
-                                modifier = Modifier.testTag("recipe_form_cat_option_custom")
-                            )
-                        }
-                    }
-
-                    var diffExpanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = diffExpanded,
-                        onExpandedChange = { diffExpanded = it },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        OutlinedTextField(
-                            value = if (difficulty.isNotBlank()) LocalizedLabels.difficulty(context, difficulty) else "",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text(stringResource(R.string.recipe_form_diff_label)) },
-                            placeholder = { Text(stringResource(R.string.recipe_form_diff_select_hint)) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = diffExpanded) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                                .fillMaxWidth()
-                                .testTag("recipe_form_difficulty_dropdown")
-                        )
-                        ExposedDropdownMenu(
-                            expanded = diffExpanded,
-                            onDismissRequest = { diffExpanded = false }
-                        ) {
-                            difficulties.forEach { diff ->
-                                DropdownMenuItem(
-                                    text = { Text(LocalizedLabels.difficulty(context, diff)) },
-                                    onClick = {
-                                        difficulty = diff
-                                        diffExpanded = false
+                            if (category.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = PostItMint,
+                                    border = BorderStroke(1.dp, CharcoalInk.copy(alpha = 0.45f)),
+                                    onClick = { category = "" },
+                                    modifier = Modifier
+                                        .heightIn(min = 36.dp)
+                                        .testTag("recipe_form_cat_clear")
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = LocalizedLabels.recipeCategory(context, category),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CharcoalInk
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = stringResource(R.string.recipe_form_cat_clear_cd),
+                                            tint = CharcoalInk,
+                                            modifier = Modifier.size(14.dp)
+                                        )
                                     }
+                                }
+                            }
+                        }
+
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            categories.forEach { cat ->
+                                val isSelected = category.equals(cat, ignoreCase = true)
+                                val isSavedCustom = customSavedCategories.any {
+                                    RecipeCategories.normalizeKey(it) == RecipeCategories.normalizeKey(cat)
+                                }
+                                val chipBg = if (isSelected) {
+                                    when (cat) {
+                                        "Desayunos", "Pan" -> PostItPeach
+                                        "Almuerzos", "Comidas" -> PostItMint
+                                        "Cenas" -> PostItSky
+                                        "Postres" -> PostItPink
+                                        else -> PostItYellow
+                                    }
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = chipBg,
+                                    border = BorderStroke(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) CharcoalInk else MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    modifier = Modifier.heightIn(min = 48.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .heightIn(min = 48.dp)
+                                            .clickable {
+                                                category = if (isSelected) "" else cat
+                                            }
+                                            .padding(
+                                                start = 12.dp,
+                                                end = if (isSavedCustom) 4.dp else 12.dp,
+                                                top = 6.dp,
+                                                bottom = 6.dp
+                                            )
+                                            .testTag("recipe_form_cat_option_$cat")
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = CharcoalInk,
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .padding(end = 4.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = LocalizedLabels.recipeCategory(context, cat),
+                                            fontFamily = PatrickHandFontFamily,
+                                            fontSize = 17.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) CharcoalInk else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (isSavedCustom) {
+                                            IconButton(
+                                                onClick = {
+                                                    AppSettingsPreferences.removeCustomRecipeCategory(context, cat)
+                                                    if (category.equals(cat, ignoreCase = true)) {
+                                                        category = ""
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .size(32.dp)
+                                                    .testTag("recipe_form_cat_remove_$cat")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = stringResource(R.string.recipe_form_cat_remove_cd),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (showCustomCategoryInput) PostItYellow else PostItSky.copy(alpha = 0.45f),
+                                border = BorderStroke(
+                                    width = if (showCustomCategoryInput) 2.dp else 1.2.dp,
+                                    color = BlueprintNavy.copy(alpha = 0.85f)
+                                ),
+                                onClick = { showCustomCategoryInput = !showCustomCategoryInput },
+                                modifier = Modifier
+                                    .heightIn(min = 48.dp)
+                                    .testTag("recipe_form_cat_option_custom")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showCustomCategoryInput) Icons.Default.Close else Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = BlueprintNavy,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.recipe_form_cat_new_chip),
+                                        fontFamily = PatrickHandFontFamily,
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BlueprintNavy
+                                    )
+                                }
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showCustomCategoryInput) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = customCategoryText,
+                                    onValueChange = { customCategoryText = it },
+                                    label = { Text(stringResource(R.string.recipe_form_cat_custom_label)) },
+                                    placeholder = { Text(stringResource(R.string.recipe_form_cat_custom_hint)) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { applyCustomCategoryInput() }),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("recipe_form_custom_category")
+                                )
+                                PostItButton(
+                                    text = stringResource(R.string.recipe_form_cat_add_btn),
+                                    icon = Icons.Default.Add,
+                                    onClick = { applyCustomCategoryInput() },
+                                    backgroundColor = PostItMint,
+                                    fontSize = 17.sp,
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                                    modifier = Modifier
+                                        .heightIn(min = 48.dp)
+                                        .testTag("recipe_form_custom_category_add")
                                 )
                             }
                         }
                     }
                 }
 
-                if (isCustomCategory) {
+                var diffExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = diffExpanded,
+                    onExpandedChange = { diffExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     OutlinedTextField(
-                        value = customCategoryText,
-                        onValueChange = { customCategoryText = it },
-                        label = { Text(stringResource(R.string.recipe_form_cat_custom_label)) },
-                        placeholder = { Text(stringResource(R.string.recipe_form_cat_custom_hint)) },
+                        value = if (difficulty.isNotBlank()) LocalizedLabels.difficulty(context, difficulty) else "",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.recipe_form_diff_label)) },
+                        placeholder = { Text(stringResource(R.string.recipe_form_diff_select_hint)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = diffExpanded) },
                         modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                             .fillMaxWidth()
-                            .testTag("recipe_form_custom_category"),
-                        singleLine = true
+                            .testTag("recipe_form_difficulty_dropdown")
                     )
+                    ExposedDropdownMenu(
+                        expanded = diffExpanded,
+                        onDismissRequest = { diffExpanded = false }
+                    ) {
+                        difficulties.forEach { diff ->
+                            DropdownMenuItem(
+                                text = { Text(LocalizedLabels.difficulty(context, diff)) },
+                                onClick = {
+                                    difficulty = diff
+                                    diffExpanded = false
+                                }
+                            )
+                        }
+                    }
                 }
 
                 Row(

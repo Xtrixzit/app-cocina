@@ -176,10 +176,9 @@ class CookingRepository(
     }
 
     /**
-     * Initializes either:
-     * - Guest Mode: seeds sample data ONLY in local Room if empty (NEVER touches Firestore/cloud), OR
-     * - Google Mode: syncs `/users/{uid}` profile doc and seeds cloud samples ONLY if user's Firestore workspace is empty
-     *   (never uploading guest local data to the cloud).
+     * Initializes either Guest Mode (local Room) or Google Mode (Cloud Firestore),
+     * running a one-time cleanup of any untouched auto-seeded starter records left behind by
+     * earlier app versions so the app starts 100% empty until the user enters data manually.
      */
     suspend fun ensureSessionBootstrapped(
         userId: String,
@@ -191,6 +190,7 @@ class CookingRepository(
             if (!forceRefresh && bootstrappedKey == targetKey) return@withLock Result.success(Unit)
             try {
                 if (isGuestMode) {
+                    purgeLegacyGuestStartersIfNeeded()
                     val localPantry = pantryDao.getAllPantryItemsList()
                     AppShortcutsUpdater.notifyPantryUpdated(appContext, localPantry.map { it.toDomain() })
                     bootstrappedKey = GUEST_USER_ID
@@ -205,6 +205,8 @@ class CookingRepository(
                     displayName = firebaseUser?.displayName.orEmpty(),
                     photoUrl = firebaseUser?.photoUrl?.toString().orEmpty()
                 )
+
+                purgeLegacyCloudStartersIfNeeded(uid)
 
                 val cloudRecipes = recipesCol(uid).limit(1).get(Source.DEFAULT).await()
                 val cloudPantry = pantryCol(uid).limit(1).get(Source.DEFAULT).await()
@@ -226,6 +228,41 @@ class CookingRepository(
                 Result.failure(e)
             }
         }
+    }
+
+    private suspend fun purgeLegacyGuestStartersIfNeeded() {
+        if (AppSettingsPreferences.hasCleanedLegacyStarters(appContext, GUEST_USER_ID)) return
+        val localRecipes = recipeDao.getAllRecipesList().map { it.toDomain() }
+        for (recipe in localRecipes) {
+            if (SampleContentLocalizer.isLegacyStarterRecipe(recipe) && recipe.id.isNotBlank()) {
+                recipeDao.deleteById(recipe.id)
+            }
+        }
+        val localPantry = pantryDao.getAllPantryItemsList().map { it.toDomain() }
+        for (item in localPantry) {
+            if (SampleContentLocalizer.isLegacyStarterPantryItem(item) && item.id.isNotBlank()) {
+                pantryDao.deleteById(item.id)
+            }
+        }
+        AppSettingsPreferences.markLegacyStartersCleaned(appContext, GUEST_USER_ID)
+    }
+
+    private suspend fun purgeLegacyCloudStartersIfNeeded(uid: String) {
+        val scopeKey = "cloud:$uid"
+        if (AppSettingsPreferences.hasCleanedLegacyStarters(appContext, scopeKey)) return
+        val cloudRecipes = getRecipesSnapshot(uid, isGuestMode = false)
+        for (recipe in cloudRecipes) {
+            if (SampleContentLocalizer.isLegacyStarterRecipe(recipe) && SecurityUtils.isValidDocId(recipe.id)) {
+                recipesCol(uid).document(recipe.id).delete().await()
+            }
+        }
+        val cloudPantry = getPantryItemsSnapshot(uid, isGuestMode = false)
+        for (item in cloudPantry) {
+            if (SampleContentLocalizer.isLegacyStarterPantryItem(item) && SecurityUtils.isValidDocId(item.id)) {
+                pantryCol(uid).document(item.id).delete().await()
+            }
+        }
+        AppSettingsPreferences.markLegacyStartersCleaned(appContext, scopeKey)
     }
 
     private suspend fun syncGoogleAccountProfile(
@@ -307,11 +344,11 @@ class CookingRepository(
         val sanitizedRecipe = recipe.copy(
             id = docId,
             title = safeTitle,
-            category = recipe.category.trim().ifBlank { "Almuerzos" }.take(50),
+            category = recipe.category.trim().take(50),
             servings = recipe.servings.coerceIn(1, 1000),
             prepTimeMinutes = recipe.prepTimeMinutes.coerceIn(0, 1440),
             cookTimeMinutes = recipe.cookTimeMinutes.coerceIn(0, 1440),
-            difficulty = recipe.difficulty.trim().ifBlank { "Fácil" }.take(30),
+            difficulty = recipe.difficulty.trim().take(30),
             ingredients = safeIngredients,
             instructions = recipe.instructions.take(150),
             notes = recipe.notes.take(5000),
@@ -956,34 +993,6 @@ class CookingRepository(
         } catch (e: Exception) {
             if (!isGuestMode) {
                 handleFirestoreError(e, OperationType.WRITE, "users/$userId/shopping_items")
-            }
-            Result.failure(e)
-        }
-    }
-
-    suspend fun seedSampleRecipes(
-        userId: String,
-        isGuestMode: Boolean
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val uid = if (isGuestMode) GUEST_USER_ID else requireCloudUserId(userId)
-            val samples = SampleContentLocalizer.starterRecipes(appContext)
-
-            for (recipe in samples) {
-                saveRecipe(uid, recipe, isGuestMode).getOrThrow()
-            }
-
-            val pantrySamples = SampleContentLocalizer.starterPantryItems(appContext)
-
-            for (p in pantrySamples) {
-                savePantryItem(uid, p, isGuestMode).getOrThrow()
-            }
-            Result.success(Unit)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (!isGuestMode) {
-                handleFirestoreError(e, OperationType.WRITE, "users/$userId")
             }
             Result.failure(e)
         }

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="database" path="cooking_pantry_database" />
-        <include domain="sharedpref" path="recetario_settings.xml" />
+        <exclude domain="database" path="cooking_pantry_database" />
+        <exclude domain="sharedpref" path="recetario_settings.xml" />
         <exclude domain="sharedpref" path="recetario_session.xml" />
     </cloud-backup>
     <device-transfer>
-        <include domain="database" path="cooking_pantry_database" />
-        <include domain="sharedpref" path="recetario_settings.xml" />
+        <exclude domain="database" path="cooking_pantry_database" />
+        <exclude domain="sharedpref" path="recetario_settings.xml" />
         <exclude domain="sharedpref" path="recetario_session.xml" />
     </device-transfer>
 </data-extraction-rules>

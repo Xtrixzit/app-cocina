@@ -896,4 +896,17 @@
     <string name="dashboard_empty_step3">3. Calculate portion costs, margins, and batches with zero guessed numbers</string>
     <string name="dashboard_empty_cta_recipe">Add my first recipe</string>
     <string name="dashboard_empty_cta_pantry">Go to Pantry</string>
+
+    <!-- Recipe Categories Picker & Manager -->
+    <string name="recipe_form_cat_new_chip">+ New</string>
+    <string name="recipe_form_cat_add_btn">Add</string>
+    <string name="recipe_form_cat_optional_hint">Tap a category to pick it or create your own</string>
+    <string name="recipe_form_cat_clear_cd">Clear category</string>
+    <string name="recipe_form_cat_remove_cd">Delete custom category</string>
+    <string name="recipes_manage_categories_chip">+ Category</string>
+    <string name="manage_categories_title">Recipe categories</string>
+    <string name="manage_categories_subtitle">Create your own categories (Bakery, Weekly menu, Vegan…) to organize and filter your recipes.</string>
+    <string name="manage_categories_custom_section">Your custom categories</string>
+    <string name="manage_categories_empty_custom">No custom categories yet. Add one above to reuse it anytime.</string>
+    <string name="manage_categories_base_section">Included categories</string>
 </resources>

@@ -1897,16 +1897,20 @@ class ExampleRobolectricTest {
         }
         composeRule.waitForIdle()
 
+        AppSettingsPreferences.clearCustomRecipeCategories(context)
         composeRule.onNodeWithTag("recipe_form_title").performTextInput("Pan Rustico")
-        composeRule.onNodeWithTag("recipe_form_category_dropdown").performScrollTo().performClick()
-        composeRule.waitForIdle()
         composeRule.onNodeWithTag("recipe_form_cat_option_custom").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("recipe_form_custom_category").performScrollTo().performTextInput("Meriendas")
+        composeRule.onNodeWithTag("recipe_form_custom_category_add").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("recipe_form_cat_option_Meriendas").assertIsDisplayed()
         composeRule.onNodeWithTag("recipe_form_save").performClick()
 
         assertNotNull(savedRecipe)
         assertEquals("Meriendas", savedRecipe!!.category)
+        assertTrue(AppSettingsPreferences.getCustomRecipeCategories(context).contains("Meriendas"))
+        AppSettingsPreferences.clearCustomRecipeCategories(context)
     }
 
     @Test
@@ -2035,6 +2039,16 @@ class ExampleRobolectricTest {
             }
         }
 
+        val emptyDeadline = System.currentTimeMillis() + 8_000L
+        while (
+            (viewModel.recipesState.value is UiState.Loading || viewModel.pantryState.value is UiState.Loading) &&
+            System.currentTimeMillis() < emptyDeadline
+        ) {
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            composeRule.waitForIdle()
+            Thread.sleep(25)
+        }
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("dashboard_empty_state").assertIsDisplayed()
         composeRule.onNodeWithTag("recipe_search_field").assertDoesNotExist()
@@ -2089,6 +2103,16 @@ class ExampleRobolectricTest {
             }
         }
 
+        val filledDeadline = System.currentTimeMillis() + 8_000L
+        while (
+            (viewModel.recipesState.value is UiState.Loading || viewModel.pantryState.value is UiState.Loading) &&
+            System.currentTimeMillis() < filledDeadline
+        ) {
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            composeRule.waitForIdle()
+            Thread.sleep(25)
+        }
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("dashboard_empty_state").assertDoesNotExist()
         composeRule.onNodeWithTag("recipe_search_field").assertIsDisplayed()
@@ -2238,5 +2262,272 @@ class ExampleRobolectricTest {
         CookingDatabase.resetDatabase(context)
         AppSettingsPreferences.setLanguageCode(context, "")
         SessionPreferences.setGuestMode(context, false)
+    }
+
+    @Test
+    fun `already updated version shows no update prompt or install button even with plus signs or build tags in release`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        AppSettingsPreferences.setLanguageCode(context, "es")
+
+        assertFalse(
+            GitHubUpdateChecker.isRemoteVersionNewer(
+                remoteTagOrName = "v1.1",
+                remoteTitle = "Recetario 1.1",
+                remoteNotes = "+ 20 mejoras de estabilidad y + 5 pantallas",
+                currentVersionCode = 14,
+                currentVersionName = "1.1"
+            )
+        )
+        assertFalse(
+            GitHubUpdateChecker.isRemoteVersionNewer(
+                remoteTagOrName = "v14",
+                remoteTitle = "Build 14",
+                remoteNotes = "",
+                currentVersionCode = 14,
+                currentVersionName = "1.1"
+            )
+        )
+        assertFalse(
+            GitHubUpdateChecker.isRemoteVersionNewer(
+                remoteTagOrName = "v1.1+14",
+                remoteTitle = "Recetario 1.1",
+                remoteNotes = "",
+                currentVersionCode = 14,
+                currentVersionName = "1.1"
+            )
+        )
+        assertTrue(
+            GitHubUpdateChecker.isRemoteVersionNewer(
+                remoteTagOrName = "v1.2+15",
+                remoteTitle = "Recetario 1.2",
+                remoteNotes = "",
+                currentVersionCode = 14,
+                currentVersionName = "1.1"
+            )
+        )
+
+        val currentReleaseJson = """
+            {
+              "tag_name": "v1.1",
+              "name": "Recetario 1.1",
+              "body": "+ 18 mejoras de diseño y cálculo",
+              "html_url": "https://github.com/Xtrixzit/app-cocina/releases/tag/v1.1"
+            }
+        """.trimIndent()
+        val parsedCurrent = GitHubUpdateChecker.parseReleaseJson(
+            jsonBody = currentReleaseJson,
+            currentVersionCode = BuildConfig.VERSION_CODE,
+            currentVersionName = BuildConfig.VERSION_NAME,
+            githubRepo = "Xtrixzit/app-cocina"
+        )!!
+        assertTrue(parsedCurrent.latestVersionCode <= BuildConfig.VERSION_CODE)
+
+        composeRule.setContent {
+            MyApplicationTheme {
+                CommercialSettingsDialog(
+                    isGuestMode = true,
+                    localGuestCountForMigration = 0,
+                    distributionConfig = parsedCurrent,
+                    onDismiss = {},
+                    onMigrateGuestToCloud = {},
+                    onExportFullBackupJson = {},
+                    onImportFullBackupJson = { _, _ -> },
+                    onActivateLicense = {},
+                    onCheckUpdates = {},
+                    onShowPrivacyPolicy = {},
+                    onDeleteAccount = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("settings_install_update_button").assertDoesNotExist()
+        AppSettingsPreferences.setLanguageCode(context, "")
+    }
+
+    @Test
+    fun `fresh session starts with zero saved recipes pantry shopping items and production logs`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        AppSettingsPreferences.setMarginPercent(context, 0)
+        SessionPreferences.setGuestMode(context, true)
+        CookingDatabase.resetDatabase(context)
+
+        val repo = CookingRepository(context)
+        val bootstrap = repo.ensureSessionBootstrapped(
+            userId = CookingRepository.GUEST_USER_ID,
+            isGuestMode = true,
+            forceRefresh = true
+        )
+        assertTrue(bootstrap.isSuccess)
+
+        val db = CookingDatabase.getDatabase(context)
+        assertTrue(db.recipeDao().getAllRecipesList().isEmpty())
+        assertTrue(db.pantryDao().getAllPantryItemsList().isEmpty())
+        assertTrue(db.shoppingDao().getAllShoppingItemsList().isEmpty())
+        assertTrue(db.productionLogDao().getAllLogsList().isEmpty())
+        assertEquals(0, AppSettingsPreferences.getMarginPercent(context))
+
+        val viewModel = MainViewModel(
+            repository = repo,
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+        composeRule.setContent {
+            MyApplicationTheme {
+                RecipesScreen(
+                    viewModel = viewModel,
+                    pantryItems = emptyList(),
+                    onSelectRecipe = {},
+                    onAddNewRecipe = {}
+                )
+            }
+        }
+        val deadline = System.currentTimeMillis() + 8_000L
+        while (
+            (viewModel.recipesState.value is UiState.Loading || viewModel.pantryState.value is UiState.Loading) &&
+            System.currentTimeMillis() < deadline
+        ) {
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            composeRule.waitForIdle()
+            Thread.sleep(25)
+        }
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("dashboard_empty_state").assertIsDisplayed()
+
+        CookingDatabase.resetDatabase(context)
+        AppSettingsPreferences.setLanguageCode(context, "")
+        SessionPreferences.setGuestMode(context, false)
+        Unit
+    }
+
+    @Test
+    fun `bootstrap purges untouched legacy starter recipes and pantry while keeping user-entered records`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        AppSettingsPreferences.resetLegacyStarterCleanupFlags(context)
+        SessionPreferences.setGuestMode(context, true)
+        CookingDatabase.resetDatabase(context)
+
+        val repo = CookingRepository(context)
+        // Simulate legacy pre-v1.1 auto-seeded starter records plus real user-authored records
+        for (starter in SampleContentLocalizer.starterRecipes(context)) {
+            repo.saveRecipe(CookingRepository.GUEST_USER_ID, starter, isGuestMode = true).getOrThrow()
+        }
+        for (starterPantry in SampleContentLocalizer.starterPantryItems(context)) {
+            repo.savePantryItem(CookingRepository.GUEST_USER_ID, starterPantry, isGuestMode = true).getOrThrow()
+        }
+        val userRecipe = Recipe(
+            title = "Tarta de Queso Casera",
+            category = "",
+            servings = 8,
+            ingredients = listOf(RecipeIngredient(name = "Queso crema", amount = 500.0, unit = "g"))
+        )
+        repo.saveRecipe(CookingRepository.GUEST_USER_ID, userRecipe, isGuestMode = true).getOrThrow()
+        repo.savePantryItem(
+            CookingRepository.GUEST_USER_ID,
+            PantryItem(name = "Harina Integral", category = "Granos", quantity = 1000.0, unit = "g"),
+            isGuestMode = true
+        ).getOrThrow()
+
+        val bootstrap = repo.ensureSessionBootstrapped(
+            userId = CookingRepository.GUEST_USER_ID,
+            isGuestMode = true,
+            forceRefresh = true
+        )
+        assertTrue(bootstrap.isSuccess)
+
+        val remainingRecipes = repo.getRecipesSnapshot(CookingRepository.GUEST_USER_ID, isGuestMode = true)
+        assertEquals(1, remainingRecipes.size)
+        assertEquals("Tarta de Queso Casera", remainingRecipes.first().title)
+        assertEquals("", remainingRecipes.first().category)
+
+        val remainingPantry = repo.getPantryItemsSnapshot(CookingRepository.GUEST_USER_ID, isGuestMode = true)
+        assertEquals(1, remainingPantry.size)
+        assertEquals("Harina Integral", remainingPantry.first().name)
+
+        CookingDatabase.resetDatabase(context)
+        AppSettingsPreferences.resetLegacyStarterCleanupFlags(context)
+        AppSettingsPreferences.setLanguageCode(context, "")
+        SessionPreferences.setGuestMode(context, false)
+        Unit
+    }
+
+    @Test
+    fun `custom recipe categories can be added persisted filtered and deleted from RecipesScreen`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        AppSettingsPreferences.setLanguageCode(context, "es")
+        AppSettingsPreferences.clearCustomRecipeCategories(context)
+        SessionPreferences.setGuestMode(context, true)
+        CookingDatabase.resetDatabase(context)
+
+        val repo = CookingRepository(context)
+        repo.saveRecipe(
+            CookingRepository.GUEST_USER_ID,
+            Recipe(title = "Bollos de Canela", category = "Pan", servings = 6),
+            isGuestMode = true
+        ).getOrThrow()
+
+        val viewModel = MainViewModel(
+            repository = repo,
+            currentUserId = CookingRepository.GUEST_USER_ID,
+            currentUserName = "Invitado",
+            isGuestMode = true
+        )
+        composeRule.setContent {
+            MyApplicationTheme {
+                RecipesScreen(
+                    viewModel = viewModel,
+                    pantryItems = emptyList(),
+                    onSelectRecipe = {},
+                    onAddNewRecipe = {}
+                )
+            }
+        }
+        val deadline = System.currentTimeMillis() + 8_000L
+        while (viewModel.recipesState.value is UiState.Loading && System.currentTimeMillis() < deadline) {
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            composeRule.waitForIdle()
+            Thread.sleep(25)
+        }
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("recipes_manage_categories_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("manage_categories_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("manage_categories_input").performTextInput("Repostería Fina")
+        composeRule.onNodeWithTag("manage_categories_add_btn").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue(AppSettingsPreferences.getCustomRecipeCategories(context).contains("Repostería Fina"))
+        composeRule.onNodeWithTag("manage_category_delete_Repostería Fina").assertIsDisplayed()
+        composeRule.onNodeWithTag("manage_categories_close_btn").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("recipe_chip_Repostería Fina").assertExists()
+
+        // Reopen and delete the custom category
+        composeRule.onNodeWithTag("recipes_manage_categories_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("manage_category_delete_Repostería Fina").performClick()
+        composeRule.waitForIdle()
+        assertFalse(AppSettingsPreferences.getCustomRecipeCategories(context).contains("Repostería Fina"))
+
+        AppSettingsPreferences.clearCustomRecipeCategories(context)
+        CookingDatabase.resetDatabase(context)
+        AppSettingsPreferences.setLanguageCode(context, "")
+        SessionPreferences.setGuestMode(context, false)
+        Unit
     }
 }

@@ -1,10 +1,13 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,14 +25,19 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,10 +45,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +62,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,7 +81,9 @@ import com.example.ui.components.RecipeCard
 import com.example.ui.components.notebookPaperBackground
 import com.example.ui.components.sketchedBorder
 import com.example.ui.components.tutorialTarget
+import com.example.ui.theme.BlueprintNavy
 import com.example.ui.theme.CaveatFontFamily
+import com.example.ui.theme.CharcoalInk
 import com.example.ui.theme.PatrickHandFontFamily
 import com.example.ui.theme.PostItMint
 import com.example.ui.theme.PostItPeach
@@ -76,6 +91,7 @@ import com.example.ui.theme.PostItPink
 import com.example.ui.theme.PostItSky
 import com.example.ui.theme.PostItYellow
 import com.example.util.LocalizedLabels
+import com.example.util.RecipeCategories
 import com.example.util.SampleContentLocalizer
 import com.example.util.UnitConverter
 
@@ -98,20 +114,17 @@ fun RecipesScreen(
     val searchQuery by viewModel.recipeSearchQuery.collectAsState()
     val selectedCategory by viewModel.selectedRecipeCategory.collectAsState()
     val currency by AppSettingsPreferences.observeCurrency(context).collectAsStateWithLifecycle()
+    val customSavedCategories by AppSettingsPreferences.observeCustomRecipeCategories(context).collectAsStateWithLifecycle()
+    var showManageCategoriesDialog by remember { mutableStateOf(false) }
 
     val hasNoRecipesAtAll = (recipesUiState as? UiState.Success)?.data?.isEmpty() == true
     val isPantryResolvedEmpty = pantryItems.isEmpty() && pantryUiState is UiState.Success
     val showDashboardEmptyState = hasNoRecipesAtAll && isPantryResolvedEmpty
 
-    val baseCategories = listOf("Todas", "Desayunos", "Almuerzos", "Comidas", "Cenas", "Pan", "Postres", "Snacks", "Bebidas", "Sopas")
-    val customCategories = remember(recipesUiState) {
-        val successRecipes = (recipesUiState as? UiState.Success)?.data.orEmpty()
-        successRecipes
-            .map { it.category.trim() }
-            .filter { cat -> cat.isNotBlank() && baseCategories.none { it.equals(cat, ignoreCase = true) } }
-            .distinctBy { it.lowercase() }
+    val successRecipes = (recipesUiState as? UiState.Success)?.data.orEmpty()
+    val categories = remember(customSavedCategories, successRecipes) {
+        RecipeCategories.mergeFilterCategories(customSavedCategories, successRecipes)
     }
-    val categories = baseCategories + customCategories
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -219,8 +232,21 @@ fun RecipesScreen(
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(vertical = 2.dp)
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .padding(vertical = 2.dp)
+                                .testTag("recipes_category_lazy_row")
                         ) {
+                            item(key = "manage_categories_action") {
+                                PostItFilterChip(
+                                    selected = false,
+                                    onClick = { showManageCategoriesDialog = true },
+                                    text = stringResource(R.string.recipes_manage_categories_chip),
+                                    icon = Icons.Default.Add,
+                                    selectedColor = PostItSky,
+                                    modifier = Modifier.testTag("recipes_manage_categories_btn")
+                                )
+                            }
                             items(categories) { cat ->
                                 val color = when (cat) {
                                     "Todas" -> PostItYellow
@@ -390,8 +416,193 @@ fun RecipesScreen(
                     }
                 }
             }
+
+            if (showManageCategoriesDialog) {
+                ManageRecipeCategoriesDialog(
+                    customCategories = customSavedCategories,
+                    onAddCategory = { raw ->
+                        AppSettingsPreferences.addCustomRecipeCategory(context, raw)
+                    },
+                    onRemoveCategory = { cat ->
+                        AppSettingsPreferences.removeCustomRecipeCategory(context, cat)
+                        if (selectedCategory.equals(cat, ignoreCase = true)) {
+                            viewModel.selectedRecipeCategory.value = "Todas"
+                        }
+                    },
+                    onDismiss = { showManageCategoriesDialog = false }
+                )
+            }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ManageRecipeCategoriesDialog(
+    customCategories: List<String>,
+    onAddCategory: (String) -> String?,
+    onRemoveCategory: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var newCategoryText by remember { mutableStateOf("") }
+
+    fun submitNewCategory() {
+        val added = onAddCategory(newCategoryText)
+        if (added != null) {
+            newCategoryText = ""
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("manage_categories_dialog"),
+        title = {
+            Text(
+                text = stringResource(R.string.manage_categories_title),
+                fontFamily = CaveatFontFamily,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = BlueprintNavy
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.manage_categories_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newCategoryText,
+                        onValueChange = { newCategoryText = it },
+                        label = { Text(stringResource(R.string.recipe_form_cat_custom_label)) },
+                        placeholder = { Text(stringResource(R.string.recipe_form_cat_custom_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submitNewCategory() }),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("manage_categories_input")
+                    )
+                    PostItButton(
+                        text = stringResource(R.string.recipe_form_cat_add_btn),
+                        icon = Icons.Default.Add,
+                        onClick = { submitNewCategory() },
+                        backgroundColor = PostItMint,
+                        fontSize = 16.sp,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("manage_categories_add_btn")
+                    )
+                }
+
+                HorizontalDivider(color = CharcoalInk.copy(alpha = 0.14f))
+
+                Text(
+                    text = stringResource(R.string.manage_categories_custom_section),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = BlueprintNavy
+                )
+
+                if (customCategories.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.manage_categories_empty_custom),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        customCategories.forEach { cat ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = PostItYellow.copy(alpha = 0.85f),
+                                border = BorderStroke(1.2.dp, CharcoalInk.copy(alpha = 0.7f)),
+                                modifier = Modifier.heightIn(min = 42.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                                ) {
+                                    Text(
+                                        text = cat,
+                                        fontFamily = PatrickHandFontFamily,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = CharcoalInk
+                                    )
+                                    IconButton(
+                                        onClick = { onRemoveCategory(cat) },
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .testTag("manage_category_delete_$cat")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = stringResource(R.string.recipe_form_cat_remove_cd),
+                                            tint = CharcoalInk,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.manage_categories_base_section),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    RecipeCategories.DEFAULT_CATEGORIES.forEach { cat ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Text(
+                                text = LocalizedLabels.recipeCategory(context, cat),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("manage_categories_close_btn")
+            ) {
+                Text(stringResource(R.string.action_close))
+            }
+        }
+    )
 }
 
 @Composable

@@ -321,6 +321,8 @@ class MainViewModel(
                     remoteVersionCode = latestAvailable.latestVersionCode,
                     remoteVersionName = latestAvailable.latestVersionName
                 )
+            } else {
+                UpdateNotificationHelper.cancelUpdateNotification(repository.context)
             }
         }
     }
@@ -480,24 +482,6 @@ class MainViewModel(
                 }
                 .onFailure { e ->
                     _userMessage.emit(str(R.string.vm_err_delete, e.localizedMessage ?: ""))
-                }
-        }
-    }
-
-    fun seedSampleRecipes() {
-        viewModelScope.launch {
-            repository.seedSampleRecipes(currentUserId, isGuestMode)
-                .onSuccess {
-                    val msg = if (isGuestMode) {
-                        str(R.string.vm_samples_guest)
-                    } else {
-                        str(R.string.vm_samples_cloud)
-                    }
-                    _userMessage.emit(msg)
-                    scheduleAutoDriveSync()
-                }
-                .onFailure { e ->
-                    _userMessage.emit(str(R.string.vm_err_samples, e.localizedMessage ?: ""))
                 }
         }
     }
@@ -1096,7 +1080,9 @@ class MainViewModel(
                         remoteVersionName = merged.latestVersionName
                     )
                     onUpdateFound(merged)
-                } else when (ghOutcome) {
+                } else {
+                    UpdateNotificationHelper.cancelUpdateNotification(repository.context)
+                    when (ghOutcome) {
                     is GitHubUpdateCheckResult.RepoNotFound -> {
                         val msg = str(R.string.settings_github_repo_not_found, ghOutcome.normalizedRepo)
                         _updateCheckStatus.value = msg
@@ -1128,6 +1114,7 @@ class MainViewModel(
                             _userMessage.emit(msg)
                         }
                     }
+                }
                 }
             } finally {
                 _checkingUpdates.value = false

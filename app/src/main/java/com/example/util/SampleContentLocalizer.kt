@@ -453,4 +453,85 @@ object SampleContentLocalizer {
             PantryItem(name = item("ing_pasta"), category = "Granos", quantity = 500.0, unit = "g", minQuantity = 200.0, cost = 1.50, costBaseQuantity = 500.0)
         )
     }
+
+    private data class StarterRecipeSignature(
+        val titleQuad: Quad,
+        val category: String,
+        val servings: Int,
+        val imageUrl: String,
+        val ingredientKeys: List<String>
+    )
+
+    private val starterSignatures = listOf(
+        StarterRecipeSignature(
+            titleQuad = titleTortilla,
+            category = "Almuerzos",
+            servings = 4,
+            imageUrl = ImageUtils.REF_TORTILLA,
+            ingredientKeys = listOf("ing_potatoes", "ing_eggs", "ing_onion", "ing_olive_oil", "ing_salt")
+        ),
+        StarterRecipeSignature(
+            titleQuad = titlePasta,
+            category = "Cenas",
+            servings = 2,
+            imageUrl = ImageUtils.REF_PASTA,
+            ingredientKeys = listOf("ing_pasta", "ing_chicken_breast", "ing_mushrooms", "ing_cream", "ing_garlic", "ing_parmesan")
+        ),
+        StarterRecipeSignature(
+            titleQuad = titlePancakes,
+            category = "Desayunos",
+            servings = 2,
+            imageUrl = ImageUtils.REF_PANCAKES,
+            ingredientKeys = listOf("ing_oats", "ing_banana", "ing_eggs", "ing_milk", "ing_cinnamon", "ing_baking_powder")
+        )
+    )
+
+    private data class StarterPantrySignature(
+        val itemKey: String,
+        val category: String,
+        val quantity: Double,
+        val unit: String,
+        val minQuantity: Double,
+        val cost: Double,
+        val costBaseQuantity: Double
+    )
+
+    private val starterPantrySignatures = listOf(
+        StarterPantrySignature("ing_eggs", "Lácteos", 12.0, "unidades", 4.0, 3.60, 12.0),
+        StarterPantrySignature("ing_olive_oil", "Despensa", 750.0, "ml", 200.0, 6.00, 750.0),
+        StarterPantrySignature("ing_salt", "Especias", 1000.0, "g", 200.0, 1.00, 1000.0),
+        StarterPantrySignature("ing_potatoes", "Verduras", 1000.0, "g", 500.0, 2.00, 1000.0),
+        StarterPantrySignature("ing_pasta", "Granos", 500.0, "g", 200.0, 1.50, 500.0)
+    )
+
+    /**
+     * Identifies untouched auto-seeded starter recipes inserted by older versions of the app
+     * so they can be cleaned up once without touching any user-created or edited recipes.
+     */
+    fun isLegacyStarterRecipe(recipe: Recipe): Boolean {
+        val matchedQuad = titleLookup[normalize(recipe.title)] ?: return false
+        val sig = starterSignatures.firstOrNull { it.titleQuad == matchedQuad } ?: return false
+        val imageMatches = recipe.imageUrl.isBlank() || recipe.imageUrl == sig.imageUrl
+        if (!imageMatches) return false
+        if (recipe.servings != sig.servings) return false
+        val canonicalCategory = RecipeCategories.canonicalBuiltInOrNull(recipe.category) ?: recipe.category.trim()
+        if (!canonicalCategory.equals(sig.category, ignoreCase = true)) return false
+        if (recipe.ingredients.size != sig.ingredientKeys.size) return false
+        val actualKeys = recipe.ingredients.map { canonicalItemKey(it.name) }
+        return actualKeys == sig.ingredientKeys
+    }
+
+    /**
+     * Identifies untouched auto-seeded starter pantry items inserted by older versions of the app.
+     */
+    fun isLegacyStarterPantryItem(item: PantryItem): Boolean {
+        val key = canonicalItemKey(item.name) ?: return false
+        val sig = starterPantrySignatures.firstOrNull { it.itemKey == key } ?: return false
+        return item.category.trim().equals(sig.category, ignoreCase = true) &&
+            item.unit.trim().equals(sig.unit, ignoreCase = true) &&
+            kotlin.math.abs(item.quantity - sig.quantity) < 0.001 &&
+            kotlin.math.abs(item.minQuantity - sig.minQuantity) < 0.001 &&
+            kotlin.math.abs(item.cost - sig.cost) < 0.001 &&
+            kotlin.math.abs(item.costBaseQuantity - sig.costBaseQuantity) < 0.001
+    }
 }

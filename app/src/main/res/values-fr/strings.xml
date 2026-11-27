@@ -896,4 +896,17 @@
     <string name="dashboard_empty_step3">3. Calculez coûts par portion, marges et fournées sans chiffres supposés</string>
     <string name="dashboard_empty_cta_recipe">Enregistrer ma première recette</string>
     <string name="dashboard_empty_cta_pantry">Aller au Garde-manger</string>
+
+    <!-- Recipe Categories Picker & Manager -->
+    <string name="recipe_form_cat_new_chip">+ Nouvelle</string>
+    <string name="recipe_form_cat_add_btn">Ajouter</string>
+    <string name="recipe_form_cat_optional_hint">Appuyez sur une catégorie pour la choisir ou créez les vôtres</string>
+    <string name="recipe_form_cat_clear_cd">Effacer la catégorie</string>
+    <string name="recipe_form_cat_remove_cd">Supprimer la catégorie personnalisée</string>
+    <string name="recipes_manage_categories_chip">+ Catégorie</string>
+    <string name="manage_categories_title">Catégories de recettes</string>
+    <string name="manage_categories_subtitle">Créez vos propres catégories (Pâtisserie, Boulangerie, Menu hebdo…) pour organiser et filtrer vos recettes.</string>
+    <string name="manage_categories_custom_section">Vos catégories personnalisées</string>
+    <string name="manage_categories_empty_custom">Aucune catégorie personnalisée pour le moment. Ajoutez-en une ci-dessus.</string>
+    <string name="manage_categories_base_section">Catégories incluses</string>
 </resources>

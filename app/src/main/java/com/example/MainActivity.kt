@@ -718,6 +718,7 @@ fun MainFeatureScreen(
         RecipeFormDialog(
             initialRecipe = recipeFormTarget,
             pantryItems = pantryItems,
+            existingRecipeCategories = recipesList.map { it.category },
             photoGenState = recipePhotoGenState,
             onGenerateAiPhoto = { title, category, ingredients ->
                 viewModel.generateRecipePhoto(title, category, ingredients)
@@ -860,15 +861,18 @@ fun MainFeatureScreen(
     if (showPrivacyDialog) {
         PrivacyPolicyDialog(onDismiss = { showPrivacyDialog = false })
     }
+    val activeManualUpdateConfig = manualUpdateConfig?.takeIf {
+        it.latestVersionCode > BuildConfig.VERSION_CODE
+    }
     if (forcedUpdateConfig != null) {
         UpdateAvailableDialog(
             config = forcedUpdateConfig,
             isMandatory = true,
             onDismiss = {}
         )
-    } else if (manualUpdateConfig != null) {
+    } else if (activeManualUpdateConfig != null) {
         UpdateAvailableDialog(
-            config = manualUpdateConfig!!,
+            config = activeManualUpdateConfig,
             isMandatory = false,
             onDismiss = { manualUpdateConfig = null }
         )

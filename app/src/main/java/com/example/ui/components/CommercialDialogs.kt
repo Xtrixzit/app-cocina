@@ -1480,7 +1480,7 @@ fun UpdateAvailableDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (config.githubRepo.isNotBlank() || config.latestVersionCode > BuildConfig.VERSION_CODE) {
+                if (config.latestVersionCode > BuildConfig.VERSION_CODE) {
                     Surface(
                         color = PostItMint.copy(alpha = 0.7f),
                         shape = RoundedCornerShape(8.dp),

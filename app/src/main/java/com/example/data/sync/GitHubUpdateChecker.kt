@@ -74,10 +74,18 @@ object GitHubUpdateChecker {
 
     fun extractBuildCodeHint(vararg texts: String): Int? {
         val combined = texts.joinToString(" ")
-        return Regex(
-            "(?:versionCode|build|code|\\+)\\s*[:=#(]?\\s*(\\d{1,7})",
+        val semverBuild = Regex("""\b\d+(?:\.\d+)+\+(\d{1,7})\b""")
+            .find(combined)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+        if (semverBuild != null) return semverBuild
+
+        val explicitMatch = Regex(
+            """(?:\bversionCode\s*[:=#(]?\s*|\bbuild\s*(?:[:=#(]|#|\s)\s*)(\d{1,7})""",
             RegexOption.IGNORE_CASE
-        ).find(combined)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        ).find(combined)
+        return explicitMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
     }
 
     fun parseGradleVersionInfo(gradleText: String): Pair<Int?, String?> {
@@ -100,10 +108,23 @@ object GitHubUpdateChecker {
         currentVersionName: String
     ): Boolean {
         val codeHint = extractBuildCodeHint(remoteTagOrName, remoteTitle, remoteNotes)
-        if (codeHint != null && codeHint > currentVersionCode) {
-            return true
+        if (codeHint != null) {
+            return codeHint > currentVersionCode
         }
-        val remoteParts = parseVersionSegments(remoteTagOrName.ifBlank { remoteTitle })
+        val primaryCandidate = remoteTagOrName.ifBlank { remoteTitle }.trim()
+        val strippedSingle = primaryCandidate
+            .removePrefix("refs/tags/")
+            .removePrefix("v")
+            .removePrefix("V")
+            .substringBefore("+")
+            .substringBefore("-")
+            .trim()
+        val singleIntTag = strippedSingle.toIntOrNull()
+        if (singleIntTag != null && (singleIntTag == currentVersionCode || (singleIntTag >= 10 && singleIntTag <= currentVersionCode))) {
+            return false
+        }
+
+        val remoteParts = parseVersionSegments(primaryCandidate)
         val localParts = parseVersionSegments(currentVersionName)
         val maxLen = maxOf(remoteParts.size, localParts.size)
         for (i in 0 until maxLen) {
@@ -416,7 +437,8 @@ object GitHubUpdateChecker {
             }
             val (remoteCode, remoteName) = parseGradleVersionInfo(gradleText)
             val codeIsNewer = remoteCode != null && remoteCode > currentVersionCode
-            val nameIsNewer = !remoteName.isNullOrBlank() && isRemoteVersionNewer(
+            val codeAllowsNameCompare = remoteCode == null || remoteCode >= currentVersionCode
+            val nameIsNewer = codeAllowsNameCompare && !remoteName.isNullOrBlank() && isRemoteVersionNewer(
                 remoteTagOrName = remoteName,
                 remoteTitle = "",
                 remoteNotes = "",

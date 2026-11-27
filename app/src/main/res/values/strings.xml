@@ -896,4 +896,17 @@
     <string name="dashboard_empty_step3">3. Calcula costos por porción, margen y tandas sin valores supuestos</string>
     <string name="dashboard_empty_cta_recipe">Registrar mi primera receta</string>
     <string name="dashboard_empty_cta_pantry">Ir a Despensa</string>
+
+    <!-- Recipe Categories Picker & Manager -->
+    <string name="recipe_form_cat_new_chip">+ Nueva</string>
+    <string name="recipe_form_cat_add_btn">Añadir</string>
+    <string name="recipe_form_cat_optional_hint">Toca una categoría para elegirla o crea las tuyas</string>
+    <string name="recipe_form_cat_clear_cd">Quitar categoría</string>
+    <string name="recipe_form_cat_remove_cd">Eliminar categoría personalizada</string>
+    <string name="recipes_manage_categories_chip">+ Categoría</string>
+    <string name="manage_categories_title">Categorías de recetas</string>
+    <string name="manage_categories_subtitle">Crea tus propias categorías (Postres, Panadería, Menú semanal…) para usarlas y filtrar tus recetas.</string>
+    <string name="manage_categories_custom_section">Tus categorías personalizadas</string>
+    <string name="manage_categories_empty_custom">Aún no has creado categorías personalizadas. Añade una arriba para reutilizarla siempre.</string>
+    <string name="manage_categories_base_section">Categorías incluidas</string>
 </resources>

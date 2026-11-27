@@ -2,9 +2,11 @@ package com.example.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.util.RecipeCategories
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 import java.util.Locale
 import kotlin.math.abs
 
@@ -84,6 +86,8 @@ object AppSettingsPreferences {
     private const val KEY_HAS_LOGGED_IN_BEFORE = "has_logged_in_before"
     private const val KEY_GITHUB_REPO = "github_update_repo"
     private const val KEY_LAST_NOTIFIED_UPDATE_VERSION = "last_notified_update_version"
+    private const val KEY_CUSTOM_RECIPE_CATEGORIES = "custom_recipe_categories"
+    private const val KEY_LEGACY_STARTERS_PURGED_SCOPES = "legacy_starters_purged_scopes"
 
     private val _currencyFlow = MutableStateFlow(CurrencyOption.USD)
     private val _marginFlow = MutableStateFlow(0)
@@ -94,6 +98,7 @@ object AppSettingsPreferences {
     private val _guidedTutorialCompletedFlow = MutableStateFlow(false)
     private val _hasLoggedInBeforeFlow = MutableStateFlow(false)
     private val _githubRepoFlow = MutableStateFlow("")
+    private val _customRecipeCategoriesFlow = MutableStateFlow<List<String>>(emptyList())
 
     @Volatile
     private var initialized = false
@@ -115,10 +120,40 @@ object AppSettingsPreferences {
                     _guidedTutorialCompletedFlow.value = p.getBoolean(KEY_GUIDED_TUTORIAL_DONE, false)
                     _hasLoggedInBeforeFlow.value = p.getBoolean(KEY_HAS_LOGGED_IN_BEFORE, false)
                     _githubRepoFlow.value = p.getString(KEY_GITHUB_REPO, "") ?: ""
+                    _customRecipeCategoriesFlow.value = readCustomRecipeCategories(p)
                     initialized = true
                 }
             }
         }
+    }
+
+    private fun readCustomRecipeCategories(p: SharedPreferences): List<String> {
+        val rawJson = p.getString(KEY_CUSTOM_RECIPE_CATEGORIES, "").orEmpty()
+        if (rawJson.isBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(rawJson)
+            val result = mutableListOf<String>()
+            val seen = HashSet<String>()
+            for (i in 0 until arr.length()) {
+                val clean = arr.optString(i, "").trim().take(50)
+                val key = RecipeCategories.normalizeKey(clean)
+                if (clean.isNotBlank() &&
+                    !RecipeCategories.isBuiltInCategory(clean) &&
+                    seen.add(key)
+                ) {
+                    result.add(clean)
+                }
+            }
+            result
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun writeCustomRecipeCategories(p: SharedPreferences, categories: List<String>) {
+        val arr = JSONArray()
+        categories.forEach { arr.put(it) }
+        p.edit().putString(KEY_CUSTOM_RECIPE_CATEGORIES, arr.toString()).commit()
     }
 
     private fun readDriveSyncInfo(p: SharedPreferences): DriveSyncInfo {
@@ -331,6 +366,77 @@ object AppSettingsPreferences {
 
     fun setLastNotifiedUpdateVersion(context: Context, versionCode: Int) {
         prefs(context).edit().putInt(KEY_LAST_NOTIFIED_UPDATE_VERSION, versionCode).apply()
+    }
+
+    fun observeCustomRecipeCategories(context: Context): StateFlow<List<String>> {
+        ensureLoaded(context)
+        return _customRecipeCategoriesFlow.asStateFlow()
+    }
+
+    fun getCustomRecipeCategories(context: Context): List<String> {
+        ensureLoaded(context)
+        return _customRecipeCategoriesFlow.value
+    }
+
+    /**
+     * Adds a user-defined recipe category for reuse across recipes and filters.
+     * Returns the resolved category name (canonical built-in if it matches one, or the clean custom name),
+     * or null if [rawName] is blank.
+     */
+    fun addCustomRecipeCategory(context: Context, rawName: String): String? {
+        ensureLoaded(context)
+        val clean = rawName.trim().replace(Regex("\\s+"), " ").take(50)
+        if (clean.isBlank()) return null
+
+        val canonicalBuiltIn = RecipeCategories.canonicalBuiltInOrNull(clean)
+        if (canonicalBuiltIn != null) {
+            return if (canonicalBuiltIn.equals("Todas", ignoreCase = true)) null else canonicalBuiltIn
+        }
+
+        val current = _customRecipeCategoriesFlow.value
+        val existingMatch = current.firstOrNull {
+            RecipeCategories.normalizeKey(it) == RecipeCategories.normalizeKey(clean)
+        }
+        if (existingMatch != null) return existingMatch
+
+        val updated = current + clean
+        writeCustomRecipeCategories(prefs(context), updated)
+        _customRecipeCategoriesFlow.value = updated
+        return clean
+    }
+
+    fun removeCustomRecipeCategory(context: Context, rawName: String) {
+        ensureLoaded(context)
+        val targetKey = RecipeCategories.normalizeKey(rawName)
+        if (targetKey.isEmpty()) return
+        val current = _customRecipeCategoriesFlow.value
+        val updated = current.filterNot { RecipeCategories.normalizeKey(it) == targetKey }
+        if (updated.size != current.size) {
+            writeCustomRecipeCategories(prefs(context), updated)
+            _customRecipeCategoriesFlow.value = updated
+        }
+    }
+
+    fun clearCustomRecipeCategories(context: Context) {
+        ensureLoaded(context)
+        prefs(context).edit().remove(KEY_CUSTOM_RECIPE_CATEGORIES).commit()
+        _customRecipeCategoriesFlow.value = emptyList()
+    }
+
+    fun hasCleanedLegacyStarters(context: Context, scopeKey: String): Boolean {
+        val cleaned = prefs(context).getStringSet(KEY_LEGACY_STARTERS_PURGED_SCOPES, emptySet())
+        return cleaned?.contains(scopeKey) == true
+    }
+
+    fun markLegacyStartersCleaned(context: Context, scopeKey: String) {
+        val p = prefs(context)
+        val next = (p.getStringSet(KEY_LEGACY_STARTERS_PURGED_SCOPES, emptySet()) ?: emptySet()).toMutableSet()
+        next.add(scopeKey)
+        p.edit().putStringSet(KEY_LEGACY_STARTERS_PURGED_SCOPES, next).commit()
+    }
+
+    fun resetLegacyStarterCleanupFlags(context: Context) {
+        prefs(context).edit().remove(KEY_LEGACY_STARTERS_PURGED_SCOPES).commit()
     }
 
     fun suggestedSellingPrice(cost: Double, marginPercent: Int): Double {
